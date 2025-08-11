@@ -51,7 +51,16 @@ export function AuthProvider({ children }) {
 
   const loginGoogle = useCallback(async () => {
     setError(null);
-    if (!auth) return setError(new Error("Firebase config incomplete"));
+    if (!auth) {
+      const missing = status?.missing?.length
+        ? `: missing/placeholder -> ${status.missing.join(", ")}`
+        : "";
+      setError(new Error("Firebase config incomplete" + missing));
+      if (typeof window !== "undefined") {
+        console.warn("Firebase config incomplete", status);
+      }
+      return;
+    }
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (e) {
@@ -68,7 +77,7 @@ export function AuthProvider({ children }) {
         setError(e);
       }
     }
-  }, [auth]);
+  }, [auth, status]);
 
   const logout = useCallback(async () => {
     if (!auth) return;
