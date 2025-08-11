@@ -36,7 +36,11 @@ export async function GET(req) {
     .sort({ createdAt: -1 })
     .toArray();
   return NextResponse.json(
-    docs.map(({ _id, ...r }) => ({ id: _id.toString(), ...r }))
+    docs.map(({ _id, ...r }) => ({
+      id: _id.toString(),
+      category: r.category || "general",
+      ...r,
+    }))
   );
 }
 
@@ -46,18 +50,27 @@ export async function POST(req) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const body = await req.json();
   const text = (body.text || "").trim();
+  let category = (body.category || "general") + "";
+  category = category.trim().toLowerCase();
+  if (!category) category = "general";
+  if (category.length > 32) category = category.slice(0, 32);
   if (!text) return NextResponse.json({ error: "empty" }, { status: 400 });
   const db = await getDb();
   const now = Date.now();
-  const { insertedId } = await db
-    .collection("todos")
-    .insertOne({ uid, text, completed: false, createdAt: now });
+  const { insertedId } = await db.collection("todos").insertOne({
+    uid,
+    text,
+    completed: false,
+    createdAt: now,
+    category,
+  });
   return NextResponse.json({
     id: insertedId.toString(),
     uid,
     text,
     completed: false,
     createdAt: now,
+    category,
   });
 }
 
@@ -66,13 +79,19 @@ export async function PATCH(req) {
   if (!uid)
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const body = await req.json();
-  const { id, text, completed } = body;
+  const { id, text, completed, category } = body;
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
   const db = await getDb();
   const filter = { _id: new (await import("mongodb")).ObjectId(id), uid };
   const update = { $set: {} };
   if (typeof text === "string") update.$set.text = text.trim();
   if (typeof completed === "boolean") update.$set.completed = completed;
+  if (typeof category === "string") {
+    let cat = category.trim().toLowerCase();
+    if (!cat) cat = "general";
+    if (cat.length > 32) cat = cat.slice(0, 32);
+    update.$set.category = cat;
+  }
   if (Object.keys(update.$set).length === 0)
     return NextResponse.json({ error: "no fields" }, { status: 400 });
   await db.collection("todos").updateOne(filter, update);
@@ -83,6 +102,7 @@ export async function PATCH(req) {
     text: doc.text,
     completed: doc.completed,
     createdAt: doc.createdAt,
+    category: doc.category || "general",
   });
 }
 

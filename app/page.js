@@ -7,7 +7,7 @@ export const metadata = {
 
 export default function Home() {
   return (
-    <main className="min-h-screen px-4 py-10 md:py-16 font-sans bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-950">
+    <main className="min-h-screen px-1 py-4 md:py-16 font-sans bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-950">
       <TodoApp />
     </main>
   );

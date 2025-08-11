@@ -29,30 +29,57 @@ export default function TodoApp() {
   const [input, setInput] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [editingText, setEditingText] = useState("");
+  const [editingCategory, setEditingCategory] = useState("general");
+  const [customCategories, setCustomCategories] = useState([]);
+  const baseCategories = ["general", "work", "personal", "study", "shopping"];
+  const categories = useMemo(() => {
+    const existing = Array.from(
+      new Set(todos.map((t) => (t.category || "general").toLowerCase()))
+    );
+    return Array.from(
+      new Set([...baseCategories, ...existing, ...customCategories])
+    ).sort();
+  }, [todos, customCategories]);
+  const [newCategory, setNewCategory] = useState("general");
+  const [createCategory, setCreateCategory] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
-  const visible = useMemo(() => todos.filter(FILTERS[filter]), [todos, filter]);
+  const visible = useMemo(
+    () =>
+      todos.filter(
+        (t) =>
+          FILTERS[filter](t) &&
+          (categoryFilter === "all" ||
+            (t.category || "general") === categoryFilter)
+      ),
+    [todos, filter, categoryFilter]
+  );
 
   const submit = (e) => {
     e.preventDefault();
     if (!input.trim()) return;
-    addTodo(input);
+    addTodo(input, newCategory);
     setInput("");
+    setNewCategory("general");
   };
 
   const startEdit = (todo) => {
     setEditingId(todo.id);
     setEditingText(todo.text);
+    setEditingCategory(todo.category || "general");
   };
   const saveEdit = () => {
     const text = editingText.trim();
-    if (text) editTodo(editingId, text);
+    if (text) editTodo(editingId, text, editingCategory);
     setEditingId(null);
     setEditingText("");
+    setEditingCategory("general");
   };
   const cancelEdit = () => {
     setEditingId(null);
     setEditingText("");
+    setEditingCategory("general");
   };
 
   if (!mounted) {
@@ -84,7 +111,7 @@ export default function TodoApp() {
 
   return (
     <div className="w-full max-w-xl mx-auto flex flex-col gap-6">
-      <form onSubmit={submit} className="flex gap-2">
+      <form onSubmit={submit} className="flex gap-2 flex-wrap">
         <input
           type="text"
           placeholder="What needs to be done?"
@@ -92,6 +119,43 @@ export default function TodoApp() {
           onChange={(e) => setInput(e.target.value)}
           className="flex-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
         />
+        <select
+          value={newCategory}
+          onChange={(e) => setNewCategory(e.target.value)}
+          className="rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+        >
+          {categories.map((c) => (
+            <option key={c} value={c}>
+              {c.charAt(0).toUpperCase() + c.slice(1)}
+            </option>
+          ))}
+        </select>
+        <div className="flex items-stretch gap-1">
+          <input
+            type="text"
+            placeholder="New category"
+            value={createCategory}
+            onChange={(e) => setCreateCategory(e.target.value)}
+            className="w-32 rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-2 text-sm focus:ring-2 focus:ring-violet-500"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const raw = createCategory.trim().toLowerCase();
+              if (!raw) return;
+              const cat = raw.slice(0, 32);
+              if (!customCategories.includes(cat)) {
+                setCustomCategories((c) => [...c, cat]);
+              }
+              setNewCategory(cat);
+              setCreateCategory("");
+            }}
+            className="rounded bg-violet-600 hover:bg-violet-500 text-white px-3 text-sm disabled:opacity-40"
+            disabled={!createCategory.trim()}
+          >
+            Add
+          </button>
+        </div>
         <button
           type="submit"
           className="rounded bg-blue-600 hover:bg-blue-500 text-white px-4 font-medium disabled:opacity-40"
@@ -128,6 +192,33 @@ export default function TodoApp() {
             Clear completed
           </button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="font-medium text-neutral-500">Categories:</span>
+        <button
+          onClick={() => setCategoryFilter("all")}
+          className={`px-2 py-1 rounded border transition-colors ${
+            categoryFilter === "all"
+              ? "bg-violet-600 text-white border-violet-600"
+              : "border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+          }`}
+        >
+          All
+        </button>
+        {categories.map((c) => (
+          <button
+            key={c}
+            onClick={() => setCategoryFilter(c)}
+            className={`px-2 py-1 rounded border capitalize transition-colors ${
+              categoryFilter === c
+                ? "bg-violet-600 text-white border-violet-600"
+                : "border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            }`}
+          >
+            {c}
+          </button>
+        ))}
       </div>
 
       <ul
@@ -183,6 +274,12 @@ export default function TodoApp() {
                           todo.completed ? "line-through text-neutral-400" : ""
                         }`}
                       >
+                        <span className="mr-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
+                          {(todo.category || "general")
+                            .slice(0, 1)
+                            .toUpperCase() +
+                            (todo.category || "general").slice(1)}
+                        </span>
                         {todo.text}
                       </motion.p>
                     )}
@@ -199,7 +296,7 @@ export default function TodoApp() {
                         className="w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white/90 dark:bg-neutral-800 px-2 py-1 text-sm"
                       />
                     )}
-                    <div className="mt-1 flex gap-2 text-xs opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                    <div className="mt-1 flex flex-wrap gap-2 text-xs items-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                       {!isEditing && (
                         <motion.button
                           whileTap={{ scale: 0.9 }}
@@ -211,6 +308,17 @@ export default function TodoApp() {
                       )}
                       {isEditing && (
                         <>
+                          <select
+                            value={editingCategory}
+                            onChange={(e) => setEditingCategory(e.target.value)}
+                            className="rounded border border-neutral-300 dark:border-neutral-600 bg-white/80 dark:bg-neutral-800 px-2 py-1 text-[11px]"
+                          >
+                            {categories.map((c) => (
+                              <option key={c} value={c}>
+                                {c.charAt(0).toUpperCase() + c.slice(1)}
+                              </option>
+                            ))}
+                          </select>
                           <motion.button
                             whileTap={{ scale: 0.9 }}
                             onClick={saveEdit}

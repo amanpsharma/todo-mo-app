@@ -28,6 +28,7 @@ function reducer(state, action) {
           text,
           completed: false,
           createdAt: Date.now(),
+          category: action.payload.category || "general",
         },
         ...state,
       ];
@@ -41,8 +42,16 @@ function reducer(state, action) {
     case ACTIONS.CLEAR_COMPLETED:
       return state.filter((t) => !t.completed);
     case ACTIONS.EDIT: {
-      const { id, text } = action.payload;
-      return state.map((t) => (t.id === id ? { ...t, text: text.trim() } : t));
+      const { id, text, category } = action.payload;
+      return state.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              text: text.trim(),
+              ...(category ? { category } : {}),
+            }
+          : t
+      );
     }
     case ACTIONS.REORDER:
       return action.payload;
@@ -140,13 +149,12 @@ export function useTodos(uid) {
   );
 
   const addTodo = useCallback(
-    async (text) => {
+    async (text, category = "general") => {
       text = text.trim();
       if (!text || !uid) return;
-      const tempId = crypto.randomUUID();
       await safeRun(
         () => {
-          dispatch({ type: ACTIONS.ADD, payload: { text } });
+          dispatch({ type: ACTIONS.ADD, payload: { text, category } });
           return () => fetchTodos(); // fallback revert by refetch
         },
         async () => {
@@ -157,7 +165,7 @@ export function useTodos(uid) {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ text }),
+            body: JSON.stringify({ text, category }),
           });
           if (!res.ok) throw new Error("Create failed");
         }
@@ -234,23 +242,25 @@ export function useTodos(uid) {
   }, [uid, todos, getToken, safeRun, fetchTodos]);
 
   const editTodo = useCallback(
-    async (id, text) => {
+    async (id, text, category) => {
       text = text.trim();
       if (!text || !uid) return;
       await safeRun(
         () => {
-          dispatch({ type: ACTIONS.EDIT, payload: { id, text } });
+          dispatch({ type: ACTIONS.EDIT, payload: { id, text, category } });
           return () => fetchTodos();
         },
         async () => {
           const token = await getToken();
+          const body = { id, text };
+          if (category) body.category = category;
           const res = await fetch("/api/todos", {
             method: "PATCH",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ id, text }),
+            body: JSON.stringify(body),
           });
           if (!res.ok) throw new Error("Edit failed");
         }
