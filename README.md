@@ -1,36 +1,109 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+## Todo App (Next.js + Firebase Auth + MongoDB)
 
-## Getting Started
+Interactive todo list using Firebase (Google) Auth for identity and MongoDB for persistent CRUD storage via Next.js API routes.
 
-First, run the development server:
+### Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Add, edit, delete todos
+- Toggle complete state
+- Filter: All / Active / Completed
+- Clear all completed
+- Secure per-user persistence in MongoDB (via `/api/todos`)
+- Accessible semantics (lists, buttons, form, aria-live updates)
+- Responsive + dark mode friendly
+
+### Quick Start
+
+1. Install deps (if not already):
+
+```
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Run dev:
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+```
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3. Open http://localhost:3000
+4. Add Firebase config: copy `.env.example` to `.env.local` and fill your project values.
 
-## Learn More
+### Firebase Auth
 
-To learn more about Next.js, take a look at the following resources:
+Google auth is enabled via Firebase Web SDK. Provide the env vars, enable Google provider in Firebase console, and the header will show a Google Login button. The ID token is sent (Bearer) to protected API routes which validate it server‑side with the Firebase Admin SDK.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### MongoDB Persistence
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Todos are stored in a MongoDB collection `todos` keyed by `uid`. CRUD is exposed through RESTful handlers in `app/api/todos/route.js` (GET, POST, PATCH, DELETE). The server validates the Firebase ID token then scopes all queries by the authenticated `uid`.
 
-## Deploy on Vercel
+### File Overview
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `app/page.js` – page rendering the `TodoApp`
+- `app/components/TodoApp.jsx` – main interactive UI (client component)
+- `app/components/useTodos.js` – state + optimistic CRUD via `/api/todos`
+- `app/components/AuthProvider.jsx` – Firebase auth context
+- `app/api/todos/route.js` – protected MongoDB CRUD endpoints
+- `app/lib/mongo.js` – MongoDB client singleton
+- `app/lib/firebaseClient.js` – Firebase client SDK init
+- `app/lib/firebaseAdmin.js` – Firebase Admin token verification
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Environment Variables
+
+Create `.env.local` with (example names – fill with real values):
+
+```
+NEXT_PUBLIC_FIREBASE_API_KEY=...
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
+NEXT_PUBLIC_FIREBASE_APP_ID=...
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=...
+
+MONGODB_URI=mongodb+srv://user:pass@cluster-host/dbname?retryWrites=true&w=majority
+MONGODB_DB=yourDatabaseName
+
+# Firebase Admin (choose one approach)
+FIREBASE_PROJECT_ID=...
+FIREBASE_CLIENT_EMAIL=...
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+```
+
+If you already have a service account JSON, map its fields to the above variables (escape newlines in PRIVATE_KEY). Alternatively you can mount a JSON file and import it, but env vars keep deployment simple.
+
+### Data Model
+
+MongoDB `todos` documents:
+
+```
+{
+	_id: ObjectId,
+	uid: string,        // Firebase Auth user id
+	text: string,
+	completed: boolean,
+	createdAt: number   // epoch ms
+}
+```
+
+### Security Notes
+
+- All API requests require a valid Firebase ID token (Bearer header)
+- Server re-validates token each request (no session storage)
+- Queries & mutations always include `uid` filter
+
+### Customization Ideas
+
+- Add drag & drop ordering (persist an `order` field)
+- Add pagination or infinite scroll
+- Add server actions instead of REST
+- Add rate limiting / input validation (zod)
+- Add tests (Vitest / React Testing Library)
+
+### Firestore
+
+Previously used; now removed in favor of MongoDB. You can delete unused Firestore rules if no longer needed.
+
+### License
+
+MIT
