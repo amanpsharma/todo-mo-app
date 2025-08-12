@@ -170,16 +170,37 @@ export async function DELETE(req) {
   if (!decoded)
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const uid = decoded.uid;
+  const emailLower = (decoded.email || "").toLowerCase();
   const body = await req.json().catch(() => ({}));
-  const viewerEmail = (body.viewerEmail || "").toString().trim().toLowerCase();
+
   const category = (body.category || "").toString().trim().toLowerCase();
-  if (!category || !viewerEmail)
-    return NextResponse.json({ error: "missing fields" }, { status: 400 });
+  const viewerEmail = (body.viewerEmail || "").toString().trim().toLowerCase();
+  const ownerUidInBody = (body.ownerUid || "").toString().trim();
+
+  if (!category)
+    return NextResponse.json({ error: "missing category" }, { status: 400 });
+
   const db = await getDb();
-  const res = await db.collection("shares").deleteMany({
-    ownerUid: uid,
-    category,
-    viewerEmailLower: viewerEmail,
-  });
-  return NextResponse.json({ ok: true, deleted: res.deletedCount || 0 });
+
+  // Case 1: Owner revokes a viewer by email
+  if (viewerEmail) {
+    const res = await db.collection("shares").deleteMany({
+      ownerUid: uid,
+      category,
+      viewerEmailLower: viewerEmail,
+    });
+    return NextResponse.json({ ok: true, deleted: res.deletedCount || 0 });
+  }
+
+  // Case 2: Viewer leaves a shared category from a specific owner
+  if (ownerUidInBody) {
+    const res = await db.collection("shares").deleteMany({
+      ownerUid: ownerUidInBody,
+      category,
+      $or: [{ viewerUid: uid }, { viewerEmailLower: emailLower }],
+    });
+    return NextResponse.json({ ok: true, deleted: res.deletedCount || 0 });
+  }
+
+  return NextResponse.json({ error: "bad request" }, { status: 400 });
 }
