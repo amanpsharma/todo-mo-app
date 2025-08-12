@@ -4,6 +4,9 @@ import { useState, useMemo, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTodos } from "./useTodos";
 import { useAuth } from "./AuthProvider";
+import AddTodoForm from "./AddTodoForm";
+import CategoryChips from "./CategoryChips";
+import DeleteCategoryModal from "./DeleteCategoryModal";
 
 const FILTERS = {
   all: (t) => true,
@@ -24,6 +27,7 @@ export default function TodoApp() {
     clearCompleted,
     editTodo,
     stats,
+    removeCategory,
   } = useTodos(uid);
   const [filter, setFilter] = useState("all");
   const [input, setInput] = useState("");
@@ -44,6 +48,14 @@ export default function TodoApp() {
   const [createCategory, setCreateCategory] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [confirmDeleteCategory, setConfirmDeleteCategory] = useState(null);
+
+  // Categories that currently have at least one todo (used to protect last-delete)
+  const categoriesWithTodos = useMemo(() => {
+    return Array.from(
+      new Set(todos.map((t) => (t.category || "general").toLowerCase()))
+    );
+  }, [todos]);
 
   const visible = useMemo(
     () =>
@@ -62,6 +74,17 @@ export default function TodoApp() {
     addTodo(input, newCategory);
     setInput("");
     setNewCategory("general");
+  };
+
+  const handleAddNewCategory = () => {
+    const raw = createCategory.trim().toLowerCase();
+    if (!raw) return;
+    const cat = raw.slice(0, 32);
+    if (!customCategories.includes(cat)) {
+      setCustomCategories((c) => [...c, cat]);
+    }
+    setNewCategory(cat);
+    setCreateCategory("");
   };
 
   const startEdit = (todo) => {
@@ -111,59 +134,17 @@ export default function TodoApp() {
 
   return (
     <div className="w-full max-w-xl mx-auto flex flex-col gap-6">
-      <form onSubmit={submit} className="flex gap-2 flex-wrap">
-        <input
-          type="text"
-          placeholder="What needs to be done?"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          className="flex-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <select
-          value={newCategory}
-          onChange={(e) => setNewCategory(e.target.value)}
-          className="rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500"
-        >
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c.charAt(0).toUpperCase() + c.slice(1)}
-            </option>
-          ))}
-        </select>
-        <div className="flex items-stretch gap-1">
-          <input
-            type="text"
-            placeholder="New category"
-            value={createCategory}
-            onChange={(e) => setCreateCategory(e.target.value)}
-            className="w-32 rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-2 text-sm focus:ring-2 focus:ring-violet-500"
-          />
-          <button
-            type="button"
-            onClick={() => {
-              const raw = createCategory.trim().toLowerCase();
-              if (!raw) return;
-              const cat = raw.slice(0, 32);
-              if (!customCategories.includes(cat)) {
-                setCustomCategories((c) => [...c, cat]);
-              }
-              setNewCategory(cat);
-              setCreateCategory("");
-            }}
-            className="rounded bg-violet-600 hover:bg-violet-500 text-white px-3 text-sm disabled:opacity-40"
-            disabled={!createCategory.trim()}
-          >
-            Add
-          </button>
-        </div>
-        <button
-          type="submit"
-          className="rounded bg-blue-600 hover:bg-blue-500 text-white px-4 font-medium disabled:opacity-40"
-          disabled={!input.trim()}
-        >
-          Add
-        </button>
-      </form>
+      <AddTodoForm
+        input={input}
+        setInput={setInput}
+        newCategory={newCategory}
+        setNewCategory={setNewCategory}
+        categories={categories}
+        createCategory={createCategory}
+        setCreateCategory={setCreateCategory}
+        onSubmit={submit}
+        onAddNewCategory={handleAddNewCategory}
+      />
 
       <div className="flex items-center justify-between text-sm flex-wrap gap-2">
         <div className="flex gap-2">
@@ -194,32 +175,13 @@ export default function TodoApp() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className="font-medium text-neutral-500">Categories:</span>
-        <button
-          onClick={() => setCategoryFilter("all")}
-          className={`px-2 py-1 rounded border transition-colors ${
-            categoryFilter === "all"
-              ? "bg-violet-600 text-white border-violet-600"
-              : "border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-          }`}
-        >
-          All
-        </button>
-        {categories.map((c) => (
-          <button
-            key={c}
-            onClick={() => setCategoryFilter(c)}
-            className={`px-2 py-1 rounded border capitalize transition-colors ${
-              categoryFilter === c
-                ? "bg-violet-600 text-white border-violet-600"
-                : "border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-            }`}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
+      <CategoryChips
+        categories={categories}
+        categoryFilter={categoryFilter}
+        setCategoryFilter={setCategoryFilter}
+        categoriesWithTodos={categoriesWithTodos}
+        setConfirmDeleteCategory={setConfirmDeleteCategory}
+      />
 
       <ul
         className="flex flex-col gap-2 max-h-96 overflow-y-auto scroll-thin pr-1"
@@ -412,6 +374,20 @@ export default function TodoApp() {
       <p className="text-[11px] text-neutral-500 text-center">
         Synced securely to your account (MongoDB).
       </p>
+
+      {/* Category delete confirmation modal */}
+      <DeleteCategoryModal
+        open={!!confirmDeleteCategory}
+        category={confirmDeleteCategory || ""}
+        onCancel={() => setConfirmDeleteCategory(null)}
+        onConfirm={async () => {
+          const cat = confirmDeleteCategory;
+          if (!cat) return;
+          await removeCategory(cat);
+          if (categoryFilter === cat) setCategoryFilter("all");
+          setConfirmDeleteCategory(null);
+        }}
+      />
     </div>
   );
 }

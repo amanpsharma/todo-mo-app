@@ -113,10 +113,19 @@ export async function DELETE(req) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   const clearCompleted = searchParams.get("clearCompleted");
+  const category = searchParams.get("category");
   const db = await getDb();
   if (clearCompleted === "1") {
     await db.collection("todos").deleteMany({ uid, completed: true });
     return NextResponse.json({ cleared: true });
+  }
+  if (category) {
+    const cat = category.trim().toLowerCase();
+    const res = await db.collection("todos").deleteMany({ uid, category: cat });
+    return NextResponse.json({
+      clearedCategory: cat,
+      deletedCount: res.deletedCount || 0,
+    });
   }
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
   await db

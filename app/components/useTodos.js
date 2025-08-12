@@ -241,6 +241,35 @@ export function useTodos(uid) {
     );
   }, [uid, todos, getToken, safeRun, fetchTodos]);
 
+  const removeCategory = useCallback(
+    async (category) => {
+      if (!uid || !category) return;
+      const cat = category.toLowerCase();
+      await safeRun(
+        () => {
+          const prev = todos;
+          dispatch({
+            type: ACTIONS.HYDRATE,
+            payload: prev.filter((t) => (t.category || "general") !== cat),
+          });
+          return () => fetchTodos();
+        },
+        async () => {
+          const token = await getToken();
+          const res = await fetch(
+            `/api/todos?category=${encodeURIComponent(cat)}`,
+            {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+          if (!res.ok) throw new Error("Delete category failed");
+        }
+      );
+    },
+    [uid, todos, getToken, safeRun, fetchTodos]
+  );
+
   const editTodo = useCallback(
     async (id, text, category) => {
       text = text.trim();
@@ -292,5 +321,6 @@ export function useTodos(uid) {
     stats,
     remoteError,
     loading,
+    removeCategory,
   };
 }
