@@ -1,0 +1,158 @@
+import { NextResponse } from "next/server";
+import { getDb } from "@/app/lib/mongo";
+import { verifyIdToken } from "@/app/lib/firebaseAdmin";
+import { getApps, initializeApp, cert } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+
+function isPlaceholder(val) {
+  return !val || /REPLACE_ME|your_project_id/i.test(val);
+}
+
+function ensureAdmin() {
+  if (getApps().length) return true;
+  const projectId =
+    process.env.FIREBASE_PROJECT_ID ||
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+  if (privateKey) privateKey = privateKey.replace(/\\n/g, "\n");
+  if (isPlaceholder(clientEmail) || isPlaceholder(privateKey)) return false;
+  try {
+    initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
+    return true;
+  } catch (e) {
+    console.error("Firebase Admin init failed in shares route", e);
+    return false;
+  }
+}
+
+async function getAuthDecoded(req) {
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader) return null;
+  const token = authHeader.replace("Bearer ", "").trim();
+  if (!token) return null;
+  try {
+    return await verifyIdToken(token);
+  } catch (e) {
+    return null;
+  }
+}
+
+// GET: list shares. Use query ?my=1 to list shares you created, or ?sharedWithMe=1 to list owners who shared with you
+export async function GET(req) {
+  const decoded = await getAuthDecoded(req);
+  if (!decoded)
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const uid = decoded.uid;
+  const { searchParams } = new URL(req.url);
+  const my = searchParams.get("my");
+  const sharedWithMe = searchParams.get("sharedWithMe");
+  const db = await getDb();
+
+  if (my === "1") {
+    const list = await db
+      .collection("shares")
+      .find({ ownerUid: uid })
+      .sort({ createdAt: -1 })
+      .toArray();
+    return NextResponse.json(
+      list.map(({ _id, ...r }) => ({ id: _id.toString(), ...r }))
+    );
+  }
+
+  if (sharedWithMe === "1") {
+    const emailLower = (decoded.email || "").toLowerCase();
+    const list = await db
+      .collection("shares")
+      .find({ $or: [{ viewerUid: uid }, { viewerEmailLower: emailLower }] })
+      .toArray();
+    // Group by owner
+    const grouped = {};
+    for (const s of list) {
+      const key = s.ownerUid;
+      if (!grouped[key])
+        grouped[key] = {
+          ownerUid: s.ownerUid,
+          ownerEmail: s.ownerEmail,
+          categories: [],
+        };
+      if (!grouped[key].categories.includes(s.category))
+        grouped[key].categories.push(s.category);
+    }
+    return NextResponse.json(Object.values(grouped));
+  }
+
+  return NextResponse.json({ error: "bad request" }, { status: 400 });
+}
+
+// POST: create share { category, viewerEmail }
+export async function POST(req) {
+  const decoded = await getAuthDecoded(req);
+  if (!decoded)
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const uid = decoded.uid;
+  const ownerEmail = decoded.email || null;
+  const body = await req.json();
+  let category = (body.category || "").toString().trim().toLowerCase();
+  const viewerEmail = (body.viewerEmail || "").toString().trim().toLowerCase();
+  if (!category || !viewerEmail)
+    return NextResponse.json({ error: "missing fields" }, { status: 400 });
+  if (category.length > 32) category = category.slice(0, 32);
+  if (viewerEmail === (ownerEmail || "").toLowerCase())
+    return NextResponse.json(
+      { error: "cannot share to self" },
+      { status: 400 }
+    );
+
+  let viewerUid = null;
+  if (ensureAdmin()) {
+    try {
+      const userRec = await getAuth().getUserByEmail(viewerEmail);
+      viewerUid = userRec.uid;
+    } catch (e) {
+      // If not found or admin not configured fully, proceed with email only
+    }
+  }
+
+  const db = await getDb();
+  const existing = await db.collection("shares").findOne({
+    ownerUid: uid,
+    category,
+    $or: [
+      ...(viewerUid ? [{ viewerUid }] : []),
+      { viewerEmailLower: viewerEmail },
+    ],
+  });
+  if (existing) {
+    return NextResponse.json({ ok: true, id: existing._id.toString() });
+  }
+  const { insertedId } = await db.collection("shares").insertOne({
+    ownerUid: uid,
+    ownerEmail,
+    category,
+    viewerUid: viewerUid || null,
+    viewerEmailLower: viewerEmail,
+    createdAt: Date.now(),
+  });
+  return NextResponse.json({ ok: true, id: insertedId.toString() });
+}
+
+// DELETE: revoke share { category, viewerEmail }
+export async function DELETE(req) {
+  const decoded = await getAuthDecoded(req);
+  if (!decoded)
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const uid = decoded.uid;
+  const body = await req.json().catch(() => ({}));
+  const viewerEmail = (body.viewerEmail || "").toString().trim().toLowerCase();
+  const category = (body.category || "").toString().trim().toLowerCase();
+  if (!category || !viewerEmail)
+    return NextResponse.json({ error: "missing fields" }, { status: 400 });
+  const db = await getDb();
+  const res = await db.collection("shares").deleteMany({
+    ownerUid: uid,
+    category,
+    viewerEmailLower: viewerEmail,
+  });
+  return NextResponse.json({ ok: true, deleted: res.deletedCount || 0 });
+}

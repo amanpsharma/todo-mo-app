@@ -28,6 +28,7 @@ export default function CategoryChips({
         const title = isLast
           ? `Cannot delete the last remaining category (${c})`
           : `Delete ${c} (and its todos)`;
+        const isSelected = categoryFilter === c;
         return (
           <div
             key={c}
@@ -52,7 +53,11 @@ export default function CategoryChips({
                 setConfirmDeleteCategory(c);
               }}
               aria-label={`Delete ${c} category`}
-              className={`absolute -top-1 -right-1 size-4 rounded-full leading-none flex items-center justify-center text-[10px] shadow opacity-0 group-hover:opacity-100 focus:opacity-100 transition ${
+              className={`absolute -top-1 -right-1 size-4 rounded-full leading-none flex items-center justify-center text-[10px] shadow ${
+                isSelected
+                  ? "opacity-100"
+                  : "opacity-0 sm:opacity-0 sm:group-hover:opacity-100"
+              } focus:opacity-100 transition ${
                 disabled
                   ? "bg-neutral-300 text-neutral-600 cursor-not-allowed"
                   : "bg-red-600 text-white hover:bg-red-500"

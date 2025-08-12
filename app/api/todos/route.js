@@ -25,14 +25,63 @@ async function getAuthUid(req) {
   }
 }
 
+async function getAuthDecoded(req) {
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader) return null;
+  const token = authHeader.replace("Bearer ", "").trim();
+  if (!token) return null;
+  try {
+    return await verifyIdToken(token);
+  } catch (e) {
+    return null;
+  }
+}
+
 export async function GET(req) {
-  const uid = await getAuthUid(req);
-  if (!uid)
+  const decoded = await getAuthDecoded(req);
+  if (!decoded)
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const uid = decoded.uid;
+  const emailLower = (decoded.email || "").toLowerCase();
+  const { searchParams } = new URL(req.url);
+  const owner = (searchParams.get("owner") || "").trim();
+  const category = (searchParams.get("category") || "").trim().toLowerCase();
   const db = await getDb();
+
+  // If requesting own todos
+  if (!owner || owner === uid) {
+    const docs = await db
+      .collection("todos")
+      .find({ uid })
+      .sort({ createdAt: -1 })
+      .toArray();
+    return NextResponse.json(
+      docs.map(({ _id, ...r }) => ({
+        id: _id.toString(),
+        category: r.category || "general",
+        ...r,
+      }))
+    );
+  }
+
+  // Viewing another user's todos: must be shared
+  if (!category) {
+    return NextResponse.json(
+      { error: "category required for shared view" },
+      { status: 400 }
+    );
+  }
+  const share = await db.collection("shares").findOne({
+    ownerUid: owner,
+    category,
+    $or: [{ viewerUid: uid }, { viewerEmailLower: emailLower }],
+  });
+  if (!share) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
   const docs = await db
     .collection("todos")
-    .find({ uid })
+    .find({ uid: owner, category })
     .sort({ createdAt: -1 })
     .toArray();
   return NextResponse.json(
