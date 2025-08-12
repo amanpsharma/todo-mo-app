@@ -1,4 +1,5 @@
-import TodoApp from "./components/TodoApp"; // direct import of client component
+import { Suspense } from "react";
+import TodoApp from "./components/TodoApp"; // client component
 
 export const metadata = {
   title: "Todo App",
@@ -8,7 +9,15 @@ export const metadata = {
 export default function Home() {
   return (
     <main className="min-h-screen px-1 py-4 md:py-16 font-sans bg-white dark:bg-neutral-900">
-      <TodoApp />
+      <Suspense
+        fallback={
+          <div className="w-full max-w-xl mx-auto">
+            <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white/60 dark:bg-neutral-900/50 p-6 shadow-sm animate-pulse h-40" />
+          </div>
+        }
+      >
+        <TodoApp />
+      </Suspense>
     </main>
   );
 }
