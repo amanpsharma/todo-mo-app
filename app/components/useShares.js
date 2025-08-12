@@ -82,6 +82,25 @@ export function useShares(uid) {
     [uid, getToken, refresh]
   );
 
+  // Allow a viewer to leave a shared category
+  const leaveSharedCategory = useCallback(
+    async (ownerUid, category) => {
+      if (!uid) return;
+      const token = await getToken();
+      const res = await fetch(`/api/shares`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ ownerUid, category }),
+      });
+      if (!res.ok) throw new Error("Leave share failed");
+      await refresh();
+    },
+    [uid, getToken, refresh]
+  );
+
   return {
     myShares,
     sharedWithMe,
@@ -90,5 +109,6 @@ export function useShares(uid) {
     loading,
     error,
     refresh,
+    leaveSharedCategory,
   };
 }
