@@ -19,12 +19,12 @@ export default function AddTodoForm({
         placeholder="What needs to be done?"
         value={input}
         onChange={(e) => setInput(e.target.value)}
-        className="flex-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+        className="flex-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500"
       />
       <select
         value={newCategory}
         onChange={(e) => setNewCategory(e.target.value)}
-        className="rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+        className="rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 text-neutral-900 dark:text-neutral-100"
       >
         {categories.map((c) => (
           <option key={c} value={c}>
@@ -38,7 +38,7 @@ export default function AddTodoForm({
           placeholder="New category"
           value={createCategory}
           onChange={(e) => setCreateCategory(e.target.value)}
-          className="w-32 rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-2 text-sm focus:ring-2 focus:ring-violet-500"
+          className="w-32 rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-2 text-sm focus:ring-2 focus:ring-violet-500 text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500"
         />
         <button
           type="button"

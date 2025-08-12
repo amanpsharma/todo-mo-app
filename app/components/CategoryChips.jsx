@@ -10,13 +10,15 @@ export default function CategoryChips({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
-      <span className="font-medium text-neutral-500">Categories:</span>
+      <span className="font-medium text-neutral-700 dark:text-neutral-300">
+        Categories:
+      </span>
       <button
         onClick={() => setCategoryFilter("all")}
         className={`px-2 py-1 rounded border transition-colors ${
           categoryFilter === "all"
             ? "bg-violet-600 text-white border-violet-600"
-            : "border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            : "border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-800 dark:text-neutral-200"
         }`}
       >
         All
@@ -41,7 +43,7 @@ export default function CategoryChips({
               className={`px-2 py-1 pr-6 rounded border capitalize transition-colors ${
                 categoryFilter === c
                   ? "bg-violet-600 text-white border-violet-600"
-                  : "border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                  : "border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-800 dark:text-neutral-200"
               }`}
               title={`Filter by ${c}`}
             >
@@ -59,7 +61,7 @@ export default function CategoryChips({
                   : "opacity-0 sm:opacity-0 sm:group-hover:opacity-100"
               } focus:opacity-100 transition ${
                 disabled
-                  ? "bg-neutral-300 text-neutral-600 cursor-not-allowed"
+                  ? "bg-neutral-300 text-neutral-700 cursor-not-allowed"
                   : "bg-red-600 text-white hover:bg-red-500"
               }`}
               title={title}

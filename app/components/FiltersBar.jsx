@@ -18,7 +18,7 @@ export default function FiltersBar({
             className={`px-3 py-1 rounded border text-xs uppercase tracking-wide font-medium transition-colors ${
               filter === key
                 ? "bg-blue-600 text-white border-blue-600"
-                : "border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                : "border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-800 dark:text-neutral-200"
             }`}
           >
             {key}

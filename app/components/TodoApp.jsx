@@ -1,25 +1,33 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 import { useTodos } from "./useTodos";
 import { useShares } from "./useShares";
+import {
+  FILTERS,
+  sanitizeCategoryName,
+  isValidEmail,
+  getAuthToken,
+} from "../lib/utils";
 import AddTodoForm from "./AddTodoForm";
 import CategoryChips from "./CategoryChips";
 import FiltersBar from "./FiltersBar";
-import SharesPanel from "./SharesPanel";
+import dynamic from "next/dynamic";
+const SharesPanel = dynamic(() => import("./SharesPanel"), { ssr: false });
 import TodoList from "./TodoList";
 import SharedTodosList from "./SharedTodosList";
 import DeleteCategoryModal from "./DeleteCategoryModal";
+import LoggedOutHero from "./LoggedOutHero";
 
-const FILTERS = {
-  all: (t) => true,
-  active: (t) => !t.completed,
-  completed: (t) => t.completed,
-};
+// using FILTERS from ../lib/utils
 
 export default function TodoApp() {
-  const { user } = useAuth();
+  const { user, loading, loginGoogle } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const uid = user?.uid;
@@ -73,7 +81,7 @@ export default function TodoApp() {
   const handleAddNewCategory = () => {
     const raw = createCategory.trim().toLowerCase();
     if (!raw) return;
-    const cat = raw.replace(/[^a-z0-9\-\s]/g, "").replace(/\s+/g, " ");
+    const cat = sanitizeCategoryName(createCategory);
     if (!cat) return;
     setCustomCategories((prev) => (prev.includes(cat) ? prev : [...prev, cat]));
     setNewCategory(cat);
@@ -120,7 +128,6 @@ export default function TodoApp() {
     setEditingId(null);
     setEditingText("");
   };
-
   // Delete confirmations
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [confirmDeleteCategory, setConfirmDeleteCategory] = useState(null);
@@ -148,7 +155,7 @@ export default function TodoApp() {
   const [shareMsg, setShareMsg] = useState("");
   const handleShare = async () => {
     const email = shareEmail.trim().toLowerCase();
-    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    if (!isValidEmail(email)) {
       setShareMsg("Enter a valid email");
       return;
     }
@@ -169,13 +176,9 @@ export default function TodoApp() {
   const [sharedView, setSharedView] = useState(null);
   const [sharedTodos, setSharedTodos] = useState([]);
   const [sharedLoading, setSharedLoading] = useState(false);
+  const urlInitializedRef = useRef(false);
 
-  const getToken = async () => {
-    const auth = typeof window !== "undefined" ? window.__firebaseAuth : null;
-    const token = await auth?.currentUser?.getIdToken();
-    if (!token) throw new Error("No auth token");
-    return token;
-  };
+  const getToken = getAuthToken;
 
   const loadSharedTodos = async (ownerUid, category, ownerDisplay) => {
     try {
@@ -214,14 +217,86 @@ export default function TodoApp() {
         await (refreshShares?.() || Promise.resolve());
       };
 
+  // URL -> state: initialize from search params (category and shared deep links)
+  useEffect(() => {
+    if (!mounted) return;
+    if (!categories.length) return;
+    if (urlInitializedRef.current) return;
+    // category deep-link
+    const c = searchParams.get("category");
+    if (c === "all" && categoryFilter !== "all") setCategoryFilter("all");
+    else if (c && categories.includes(c) && c !== categoryFilter) {
+      setCategoryFilter(c);
+    }
+    // filter deep-link
+    const f = (searchParams.get("filter") || "").toLowerCase();
+    if (["all", "active", "completed"].includes(f) && f !== filter) {
+      setFilter(f);
+    }
+    // shared deep-link
+    const owner = searchParams.get("sharedOwner");
+    const scat = searchParams.get("sharedCategory");
+    if (uid && owner && scat && !sharedView) {
+      // owner label unknown here; will show UID until user list loads
+      loadSharedTodos(owner, scat, owner);
+    }
+    urlInitializedRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, categories, uid]);
+
+  // state -> URL: keep categoryFilter reflected in the URL
+  useEffect(() => {
+    if (!mounted || !uid) return;
+    const params = new URLSearchParams(searchParams.toString());
+    // Always reflect category, including 'all'
+    params.set("category", categoryFilter || "all");
+    const q = params.toString();
+    router.replace(q ? `${pathname}?${q}` : pathname);
+  }, [categoryFilter, mounted, pathname, router, searchParams, uid]);
+
+  // state -> URL: keep filter reflected in the URL (including 'all')
+  useEffect(() => {
+    if (!mounted || !uid) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("filter", filter || "all");
+    const q = params.toString();
+    router.replace(q ? `${pathname}?${q}` : pathname);
+  }, [filter, mounted, pathname, router, searchParams, uid]);
+
+  // When logged out, strip query params and route to base path to avoid stale deep-links
+  useEffect(() => {
+    if (!mounted) return;
+    if (!loading && !uid) {
+      router.replace(pathname);
+    }
+  }, [mounted, loading, uid, pathname, router]);
+
+  // state <-> URL: reflect shared view in URL
+  useEffect(() => {
+    if (!mounted) return;
+    const params = new URLSearchParams(searchParams.toString());
+    if (sharedView) {
+      params.set("sharedOwner", sharedView.ownerUid);
+      params.set("sharedCategory", sharedView.category);
+    } else {
+      params.delete("sharedOwner");
+      params.delete("sharedCategory");
+    }
+    const q = params.toString();
+    router.replace(q ? `${pathname}?${q}` : pathname);
+  }, [sharedView, mounted, pathname, router, searchParams]);
+
   if (!mounted) return null;
-  if (!uid) {
+  // Prevent flashing the logged-out hero while Firebase auth resolves on reload
+  if (loading) {
     return (
-      <div className="w-full max-w-xl mx-auto text-center text-sm text-neutral-500">
-        Sign in to manage your todos.
+      <div className="w-full max-w-xl mx-auto">
+        <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white/60 dark:bg-neutral-900/50 p-6 shadow-sm animate-pulse h-40" />
       </div>
     );
   }
+  if (!uid)
+    return <LoggedOutHero loading={loading} loginGoogle={loginGoogle} />;
 
   return (
     <div className="w-full max-w-xl mx-auto flex flex-col gap-6">

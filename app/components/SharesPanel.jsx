@@ -2,6 +2,47 @@
 import React, { useMemo, useState, useEffect } from "react";
 import ConfirmModal from "./ConfirmModal";
 
+function IconTrash({ className = "", ...props }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      className={`h-4 w-4 ${className}`}
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M3 6h18" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  );
+}
+
+function IconExit({ className = "", ...props }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      className={`h-4 w-4 ${className}`}
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M9 3h6a2 2 0 0 1 2 2v4" />
+      <path d="M9 21h6a2 2 0 0 0 2-2v-4" />
+      <path d="M15 12H4" />
+      <path d="M6.5 8.5L3 12l3.5 3.5" />
+    </svg>
+  );
+}
+
 export default function SharesPanel({
   categories,
   sharedView,
@@ -22,29 +63,40 @@ export default function SharesPanel({
 }) {
   // Local UI scaling state
   const [mySharesQuery, setMySharesQuery] = useState("");
+  const [mySharesQueryDeb, setMySharesQueryDeb] = useState("");
   const [mySharesLimit, setMySharesLimit] = useState(20);
   const [sharedQuery, setSharedQuery] = useState("");
+  const [sharedQueryDeb, setSharedQueryDeb] = useState("");
   const [sharedOwnersLimit, setSharedOwnersLimit] = useState(20);
   const [showAllCats, setShowAllCats] = useState({});
   const [confirmRevoke, setConfirmRevoke] = useState(null); // { category, email }
   const [confirmLeave, setConfirmLeave] = useState(null); // { ownerUid, ownerLabel, category }
 
+  useEffect(() => {
+    const t = setTimeout(() => setMySharesQueryDeb(mySharesQuery), 200);
+    return () => clearTimeout(t);
+  }, [mySharesQuery]);
+  useEffect(() => {
+    const t = setTimeout(() => setSharedQueryDeb(sharedQuery), 200);
+    return () => clearTimeout(t);
+  }, [sharedQuery]);
+
   const filteredMyShares = useMemo(() => {
-    const q = mySharesQuery.trim().toLowerCase();
+    const q = mySharesQueryDeb.trim().toLowerCase();
     if (!q) return myShares || [];
     return (myShares || []).filter(
       (s) =>
         (s.viewerEmailLower || "").includes(q) ||
         (s.category || "").toLowerCase().includes(q)
     );
-  }, [myShares, mySharesQuery]);
+  }, [myShares, mySharesQueryDeb]);
   const visibleMyShares = useMemo(
     () => (filteredMyShares || []).slice(0, mySharesLimit),
     [filteredMyShares, mySharesLimit]
   );
 
   const filteredSharedOwners = useMemo(() => {
-    const q = sharedQuery.trim().toLowerCase();
+    const q = sharedQueryDeb.trim().toLowerCase();
     if (!q) return sharedWithMe || [];
     return (sharedWithMe || []).filter((o) => {
       const name = (
@@ -56,7 +108,7 @@ export default function SharesPanel({
       const cats = (o.categories || []).join(" ").toLowerCase();
       return name.includes(q) || cats.includes(q);
     });
-  }, [sharedWithMe, sharedQuery]);
+  }, [sharedWithMe, sharedQueryDeb]);
   const visibleSharedOwners = useMemo(
     () => (filteredSharedOwners || []).slice(0, sharedOwnersLimit),
     [filteredSharedOwners, sharedOwnersLimit]
@@ -71,7 +123,9 @@ export default function SharesPanel({
   return (
     <div className="rounded border border-neutral-200 dark:border-neutral-800 p-3 flex flex-col gap-2">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="text-sm font-semibold">Share category (view-only)</h3>
+        <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
+          Share category (view-only)
+        </h3>
         {sharedView && (
           <button
             onClick={() => setSharedView(null)}
@@ -86,7 +140,7 @@ export default function SharesPanel({
         <select
           value={shareCategory}
           onChange={(e) => setShareCategory(e.target.value)}
-          className="rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-1 text-xs"
+          className="rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-1 text-xs text-neutral-900 dark:text-neutral-100"
         >
           {categories.map((c) => (
             <option key={c} value={c}>
@@ -99,7 +153,7 @@ export default function SharesPanel({
           placeholder="Viewer email"
           value={shareEmail}
           onChange={(e) => setShareEmail(e.target.value)}
-          className="flex-1 min-w-40 rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-1 text-xs"
+          className="flex-1 min-w-40 rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-1 text-xs text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500"
         />
         <button
           onClick={onShare}
@@ -109,7 +163,9 @@ export default function SharesPanel({
           {shareBusy ? "Sharing…" : "Share"}
         </button>
         {shareMsg && (
-          <span className="text-[11px] text-neutral-500">{shareMsg}</span>
+          <span className="text-[11px] text-neutral-700 dark:text-neutral-300">
+            {shareMsg}
+          </span>
         )}
       </div>
 
@@ -137,7 +193,7 @@ export default function SharesPanel({
               {visibleMyShares.map((s) => (
                 <li
                   key={s.id}
-                  className="px-2 py-1 rounded border text-xs flex items-center gap-3 justify-between"
+                  className="px-2 py-1 rounded border text-xs flex items-center gap-3 justify-between group"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 capitalize">
@@ -155,9 +211,11 @@ export default function SharesPanel({
                         email: s.viewerEmailLower,
                       })
                     }
-                    className="text-red-600 hover:underline shrink-0"
+                    aria-label="Revoke access"
+                    title="Revoke access"
+                    className="shrink-0 p-1 rounded text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                   >
-                    Revoke
+                    <IconTrash />
                   </button>
                 </li>
               ))}
@@ -218,7 +276,10 @@ export default function SharesPanel({
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {cats.map((c) => (
-                        <div key={c} className="flex items-center gap-1">
+                        <div
+                          key={c}
+                          className="flex items-center gap-1 group/cat"
+                        >
                           <button
                             onClick={() =>
                               loadSharedTodos(
@@ -243,10 +304,11 @@ export default function SharesPanel({
                                 category: c,
                               })
                             }
-                            className="text-red-600 hover:underline"
+                            aria-label="Leave this shared category"
                             title="Leave this shared category"
+                            className="p-1 rounded text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 transition opacity-100 sm:opacity-0 sm:group-hover/cat:opacity-100"
                           >
-                            Leave
+                            <IconExit />
                           </button>
                         </div>
                       ))}
