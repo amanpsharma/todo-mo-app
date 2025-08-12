@@ -73,11 +73,35 @@ export async function GET(req) {
       if (!grouped[key])
         grouped[key] = {
           ownerUid: s.ownerUid,
-          ownerEmail: s.ownerEmail,
+          ownerEmail: s.ownerEmail || null,
+          ownerName: s.ownerName || null,
           categories: [],
         };
       if (!grouped[key].categories.includes(s.category))
         grouped[key].categories.push(s.category);
+    }
+    // Enrich with display names when Admin is available
+    if (ensureAdmin()) {
+      const entries = Object.values(grouped);
+      await Promise.all(
+        entries.map(async (e) => {
+          try {
+            const u = await getAuth().getUser(e.ownerUid);
+            if (!e.ownerEmail && u?.email) e.ownerEmail = u.email;
+            if (!e.ownerName) {
+              e.ownerName =
+                u?.displayName || (u?.email ? u.email.split("@")[0] : null);
+            }
+          } catch (e) {
+            // ignore
+          }
+        })
+      );
+    }
+    // Fallback: derive name from email if still missing
+    for (const e of Object.values(grouped)) {
+      if (!e.ownerName && e.ownerEmail)
+        e.ownerName = e.ownerEmail.split("@")[0];
     }
     return NextResponse.json(Object.values(grouped));
   }
@@ -92,6 +116,8 @@ export async function POST(req) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const uid = decoded.uid;
   const ownerEmail = decoded.email || null;
+  const ownerName =
+    decoded.name || (ownerEmail ? ownerEmail.split("@")[0] : null);
   const body = await req.json();
   let category = (body.category || "").toString().trim().toLowerCase();
   const viewerEmail = (body.viewerEmail || "").toString().trim().toLowerCase();
@@ -129,6 +155,7 @@ export async function POST(req) {
   const { insertedId } = await db.collection("shares").insertOne({
     ownerUid: uid,
     ownerEmail,
+    ownerName,
     category,
     viewerUid: viewerUid || null,
     viewerEmailLower: viewerEmail,

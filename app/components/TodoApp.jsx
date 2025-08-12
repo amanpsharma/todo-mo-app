@@ -315,7 +315,7 @@ export default function TodoApp() {
                   className="px-2 py-1 rounded border text-xs flex items-center gap-2"
                 >
                   <span className="font-medium">
-                    {o.ownerEmail || o.ownerUid}
+                    {o.ownerName || o.ownerEmail || o.ownerUid}
                   </span>
                   <span className="text-neutral-400">•</span>
                   {o.categories.map((c) => (
