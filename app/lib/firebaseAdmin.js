@@ -38,7 +38,7 @@ export async function verifyIdToken(idToken) {
     try {
       const decoded = jwt.decode(idToken, { complete: false });
       if (decoded && decoded.sub) {
-        return { uid: decoded.sub };
+        return { uid: decoded.sub, email: decoded.email || null };
       }
     } catch (e) {
       // ignore
