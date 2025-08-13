@@ -1,7 +1,7 @@
 "use client";
 import React, { useMemo, useState, useEffect } from "react";
-import ConfirmModal from "./ConfirmModal";
-import { isValidEmail } from "../lib/utils";
+import ConfirmModal from "../ui/ConfirmModal";
+import { isValidEmail } from "../../lib/utils";
 
 function IconTrash({ className = "", ...props }) {
   return (

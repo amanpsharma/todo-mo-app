@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import TodoApp from "./components/TodoApp"; // client component
+import TodoApp from "./components/todos/TodoApp";
 
 export const metadata = {
   title: "Todo App | Organize Your Tasks",

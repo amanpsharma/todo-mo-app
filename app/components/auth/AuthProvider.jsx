@@ -10,7 +10,7 @@ import {
   getFirebaseAuth,
   googleProvider,
   firebaseConfigStatus,
-} from "../lib/firebaseClient";
+} from "../../lib/firebaseClient";
 import {
   onAuthStateChanged,
   signInWithPopup,

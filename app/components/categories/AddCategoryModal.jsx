@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { sanitizeCategoryName } from "../lib/utils";
+import { sanitizeCategoryName } from "../../lib/utils";
 
 export default function AddCategoryModal({
   open,

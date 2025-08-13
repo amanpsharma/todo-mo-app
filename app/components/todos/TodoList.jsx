@@ -33,12 +33,12 @@ function CheckToggle({ checked, onToggle }) {
         }
       }}
       className={`relative inline-flex items-center justify-center rounded-md border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
-        ${
+				${
           checked
             ? "bg-green-600 border-green-600 text-white hover:bg-green-500"
             : "bg-white/90 dark:bg-neutral-900/70 border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800"
         }
-      `}
+			`}
       style={{ width: 22, height: 22 }}
       aria-label={checked ? "Mark as not completed" : "Mark as completed"}
     >
@@ -139,7 +139,7 @@ export default function TodoList({
             const itemKey =
               id1 ||
               id2 ||
-              `${todo.category || "general"}-${todo.text || "na"}-$${
+              `${todo.category || "general"}-${todo.text || "na"}-$$${
                 todo.createdAt ?? "na"
               }-${idx}`;
             return (

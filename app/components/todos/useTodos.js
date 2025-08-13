@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
-// Auth access is intentionally indirect to avoid initializing Firebase when config is incomplete.
 
 const ACTIONS = {
   HYDRATE: "HYDRATE",
@@ -64,11 +63,9 @@ export function useTodos(uid) {
   const [todos, dispatch] = useReducer(reducer, []);
   const [remoteError, setRemoteError] = useState(null);
   const [loading, setLoading] = useState(false);
-  // auth object will be accessed via window.firebaseAuth if set by AuthProvider (optional)
   const auth =
     typeof window !== "undefined" ? window.__firebaseAuth || null : null;
 
-  // Fetch list (no realtime) when uid changes or after mutations
   const fetchTodos = useCallback(async () => {
     if (!uid) {
       dispatch({ type: ACTIONS.HYDRATE, payload: [] });
@@ -76,7 +73,6 @@ export function useTodos(uid) {
       return;
     }
     if (!auth) {
-      // Auth not ready yet; try again shortly
       setLoading(true);
       setTimeout(fetchTodos, 300);
       return;
@@ -87,7 +83,7 @@ export function useTodos(uid) {
       const token = await auth.currentUser?.getIdToken();
       if (!token) {
         setLoading(false);
-        return; // user not actually signed in yet
+        return;
       }
       const res = await fetch("/api/todos", {
         headers: { Authorization: `Bearer ${token}` },
@@ -121,7 +117,6 @@ export function useTodos(uid) {
     }
   }, [fetchTodos]);
 
-  // Helper to get token
   const getToken = useCallback(async () => {
     if (!auth) throw new Error("Auth not ready");
     const token = await auth.currentUser?.getIdToken();
@@ -129,7 +124,6 @@ export function useTodos(uid) {
     return token;
   }, [auth]);
 
-  // Optimistic helper
   const safeRun = useCallback(
     async (optimistic, fn, options = {}) => {
       let revert;
@@ -141,7 +135,6 @@ export function useTodos(uid) {
         if (revert) revert();
         setRemoteError(e);
       } finally {
-        // Refresh list to sync authoritative state unless explicitly skipped
         if (options.refresh !== false) {
           fetchTodos();
         }
@@ -157,7 +150,7 @@ export function useTodos(uid) {
       await safeRun(
         () => {
           dispatch({ type: ACTIONS.ADD, payload: { text, category } });
-          return () => fetchTodos(); // fallback revert by refetch
+          return () => fetchTodos();
         },
         async () => {
           const token = await getToken();
@@ -301,7 +294,6 @@ export function useTodos(uid) {
     [uid, getToken, safeRun, fetchTodos]
   );
 
-  // reorder remains client-side only (not persisted ordering). Could add an order field later.
   const reorder = useCallback(
     (next) => dispatch({ type: ACTIONS.REORDER, payload: next }),
     []

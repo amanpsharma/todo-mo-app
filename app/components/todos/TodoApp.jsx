@@ -2,29 +2,29 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useAuth } from "./AuthProvider";
+import { useAuth } from "../auth/AuthProvider";
 import { useTodos } from "./useTodos";
-import { useShares } from "./useShares";
+import { useShares } from "../shares/useShares";
 import {
   FILTERS,
   sanitizeCategoryName,
   isValidEmail,
   getAuthToken,
-} from "../lib/utils";
+} from "../../lib/utils";
 import AddTodoForm from "./AddTodoForm";
-import CategoryChips from "./CategoryChips";
+import CategoryChips from "../categories/CategoryChips";
 import FiltersBar from "./FiltersBar";
 import dynamic from "next/dynamic";
-const SharesPanel = dynamic(() => import("./SharesPanel"), { ssr: false });
+const SharesPanel = dynamic(() => import("../shares/SharesPanel"), {
+  ssr: false,
+});
 import TodoList from "./TodoList";
-import SharedTodosList from "./SharedTodosList";
-import DeleteCategoryModal from "./DeleteCategoryModal";
-import LoggedOutHero from "./LoggedOutHero";
-import AddCategoryModal from "./AddCategoryModal";
-import Toast from "./Toast";
-import ConfirmModal from "./ConfirmModal";
-
-// using FILTERS from ../lib/utils
+import SharedTodosList from "../shares/SharedTodosList";
+import DeleteCategoryModal from "../categories/DeleteCategoryModal";
+import LoggedOutHero from "../ui/LoggedOutHero";
+import AddCategoryModal from "../categories/AddCategoryModal";
+import Toast from "../ui/Toast";
+import ConfirmModal from "../ui/ConfirmModal";
 
 export default function TodoApp() {
   const { user, loading, loginGoogle } = useAuth();
@@ -35,7 +35,6 @@ export default function TodoApp() {
   useEffect(() => setMounted(true), []);
   const uid = user?.uid;
 
-  // Todos state and actions
   const {
     todos,
     addTodo,
@@ -49,7 +48,7 @@ export default function TodoApp() {
     loading: todosLoading,
   } = useTodos(uid);
 
-  // Input and category management
+  // Inputs and categories
   const [input, setInput] = useState("");
   const [createCategory, setCreateCategory] = useState("");
   const [addCategoryOpen, setAddCategoryOpen] = useState(false);
@@ -58,7 +57,7 @@ export default function TodoApp() {
     []
   );
   const [customCategories, setCustomCategories] = useState([]);
-  // Persist custom categories so categories don't disappear when todos are cleared
+  // Persist custom categories
   useEffect(() => {
     try {
       const raw =
@@ -66,9 +65,7 @@ export default function TodoApp() {
         localStorage.getItem("customCategories");
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          setCustomCategories(parsed.filter(Boolean));
-        }
+        if (Array.isArray(parsed)) setCustomCategories(parsed.filter(Boolean));
       }
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -83,6 +80,7 @@ export default function TodoApp() {
       }
     } catch {}
   }, [customCategories]);
+
   const categoriesFromTodos = useMemo(() => {
     const set = new Set(
       todos.map((t) => {
@@ -92,7 +90,7 @@ export default function TodoApp() {
     );
     return Array.from(set);
   }, [todos]);
-  // Ensure categories discovered from todos are remembered so they persist even if empty later
+  // Remember categories discovered from todos
   useEffect(() => {
     if (!categoriesFromTodos.length) return;
     setCustomCategories((prev) => {
@@ -103,6 +101,7 @@ export default function TodoApp() {
       return Array.from(next);
     });
   }, [categoriesFromTodos, baseCategories]);
+
   const categories = useMemo(() => {
     const set = new Set([
       ...baseCategories,
@@ -155,7 +154,7 @@ export default function TodoApp() {
     return list.filter(FILTERS[filter]);
   }, [todos, filter, categoryFilter]);
 
-  // Editing state
+  // Edit state
   const [editingId, setEditingId] = useState(null);
   const [editingText, setEditingText] = useState("");
   const [editingCategory, setEditingCategory] = useState("general");
@@ -176,13 +175,14 @@ export default function TodoApp() {
     setEditingId(null);
     setEditingText("");
   };
-  // Delete confirmations
+
+  // Confirms and toast
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [confirmDeleteCategory, setConfirmDeleteCategory] = useState(null);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
-  const [lastDeleted, setLastDeleted] = useState(null); // { id, text, category, prevId }
+  const [lastDeleted, setLastDeleted] = useState(null);
   const [toastOpen, setToastOpen] = useState(false);
-  const [pendingRestore, setPendingRestore] = useState(null); // { text, category, prevId }
+  const [pendingRestore, setPendingRestore] = useState(null);
 
   // Shares
   const {
@@ -195,7 +195,6 @@ export default function TodoApp() {
     leaveSharedCategory: hookLeaveSharedCategory,
   } = useShares(uid) || {};
 
-  // Share form
   const [shareCategory, setShareCategory] = useState("general");
   useEffect(() => {
     if (!categories.includes(shareCategory) && categories.length) {
@@ -205,7 +204,7 @@ export default function TodoApp() {
   const [shareEmail, setShareEmail] = useState("");
   const [shareBusy, setShareBusy] = useState(false);
   const [shareMsg, setShareMsg] = useState("");
-  // Share a single email
+
   const handleShare = async (emailArg) => {
     const email = String(emailArg ?? shareEmail)
       .trim()
@@ -228,7 +227,7 @@ export default function TodoApp() {
       setShareBusy(false);
     }
   };
-  // Share multiple emails
+
   const handleShareMany = async (emails) => {
     const list = Array.isArray(emails) ? emails : [];
     const cleaned = list
@@ -269,7 +268,6 @@ export default function TodoApp() {
   const [sharedTodos, setSharedTodos] = useState([]);
   const [sharedLoading, setSharedLoading] = useState(false);
   const urlInitializedRef = useRef(false);
-
   const getToken = getAuthToken;
 
   const loadSharedTodos = async (ownerUid, category, ownerDisplay) => {
@@ -309,44 +307,39 @@ export default function TodoApp() {
         await (refreshShares?.() || Promise.resolve());
       };
 
-  // URL -> state: initialize from search params (category and shared deep links)
+  // Initialize from URL
   useEffect(() => {
     if (!mounted) return;
     if (!categories.length) return;
     if (urlInitializedRef.current) return;
-    // category deep-link
     const c = searchParams.get("category");
     if (c === "all" && categoryFilter !== "all") setCategoryFilter("all");
     else if (c && categories.includes(c) && c !== categoryFilter) {
       setCategoryFilter(c);
     }
-    // filter deep-link
     const f = (searchParams.get("filter") || "").toLowerCase();
     if (["all", "active", "completed"].includes(f) && f !== filter) {
       setFilter(f);
     }
-    // shared deep-link
     const owner = searchParams.get("sharedOwner");
     const scat = searchParams.get("sharedCategory");
     if (uid && owner && scat && !sharedView) {
-      // owner label unknown here; will show UID until user list loads
       loadSharedTodos(owner, scat, owner);
     }
     urlInitializedRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, categories, uid]);
 
-  // state -> URL: keep categoryFilter reflected in the URL
+  // Reflect category in URL
   useEffect(() => {
     if (!mounted || !uid) return;
     const params = new URLSearchParams(searchParams.toString());
-    // Always reflect category, including 'all'
     params.set("category", categoryFilter || "all");
     const q = params.toString();
     router.replace(q ? `${pathname}?${q}` : pathname);
   }, [categoryFilter, mounted, pathname, router, searchParams, uid]);
 
-  // state -> URL: keep filter reflected in the URL (including 'all')
+  // Reflect filter in URL
   useEffect(() => {
     if (!mounted || !uid) return;
     const params = new URLSearchParams(searchParams.toString());
@@ -355,7 +348,7 @@ export default function TodoApp() {
     router.replace(q ? `${pathname}?${q}` : pathname);
   }, [filter, mounted, pathname, router, searchParams, uid]);
 
-  // When logged out, strip query params and route to base path to avoid stale deep-links
+  // Logged out: strip params
   useEffect(() => {
     if (!mounted) return;
     if (!loading && !uid) {
@@ -363,7 +356,7 @@ export default function TodoApp() {
     }
   }, [mounted, loading, uid, pathname, router]);
 
-  // state <-> URL: reflect shared view in URL
+  // Reflect shared view in URL
   useEffect(() => {
     if (!mounted) return;
     const params = new URLSearchParams(searchParams.toString());
@@ -379,7 +372,6 @@ export default function TodoApp() {
   }, [sharedView, mounted, pathname, router, searchParams]);
 
   if (!mounted) return null;
-  // Prevent flashing the logged-out hero while Firebase auth resolves on reload
   if (loading) {
     return (
       <div className="w-full max-w-xl mx-auto">
@@ -390,7 +382,6 @@ export default function TodoApp() {
   if (!uid)
     return <LoggedOutHero loading={loading} loginGoogle={loginGoogle} />;
 
-  // Reusable remove handler used by list and confirm modal
   const handleRemoveTodo = async (id) => {
     const idx = todos.findIndex((x) => x.id === id);
     const t = idx >= 0 ? todos[idx] : null;
@@ -497,7 +488,6 @@ export default function TodoApp() {
           const cat = confirmDeleteCategory;
           if (!cat) return;
           await removeCategory(cat);
-          // Remove from saved list so it truly disappears only when explicitly deleted
           setCustomCategories((prev) => prev.filter((x) => x !== cat));
           if (categoryFilter === cat) setCategoryFilter("all");
           setConfirmDeleteCategory(null);
@@ -533,7 +523,6 @@ export default function TodoApp() {
         }}
       />
 
-      {/* Confirm: Clear completed */}
       <ConfirmModal
         open={!!confirmClearOpen}
         title="Clear completed todos"
@@ -548,7 +537,6 @@ export default function TodoApp() {
         }}
       />
 
-      {/* Confirm: Delete single todo */}
       <ConfirmModal
         open={!!confirmDeleteId}
         title="Delete todo"
@@ -562,8 +550,6 @@ export default function TodoApp() {
         }}
       />
 
-      {/* After undo add completes (state refresh), move the restored todo next to its previous neighbor */}
-      {/* Note: Order is client-side only; this keeps perceived position consistent post-undo. */}
       {pendingRestore && <span className="sr-only">Restoring…</span>}
     </div>
   );

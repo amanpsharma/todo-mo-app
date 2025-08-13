@@ -82,7 +82,6 @@ export function useShares(uid) {
     [uid, getToken, refresh]
   );
 
-  // Allow a viewer to leave a shared category
   const leaveSharedCategory = useCallback(
     async (ownerUid, category) => {
       if (!uid) return;
