@@ -205,7 +205,14 @@ export default function TodoApp() {
   const [shareBusy, setShareBusy] = useState(false);
   const [shareMsg, setShareMsg] = useState("");
 
-  const handleShare = async (emailArg) => {
+  const handleShare = async (permissionsArg, emailArg) => {
+    // backward compatibility: if first arg is email, shift
+    let perms = Array.isArray(permissionsArg) ? permissionsArg : ["read"];
+    let emailAuto = emailArg;
+    if (typeof permissionsArg === "string" && emailArg === undefined) {
+      emailAuto = permissionsArg;
+      perms = ["read"];
+    }
     const email = String(emailArg ?? shareEmail)
       .trim()
       .toLowerCase();
@@ -216,7 +223,7 @@ export default function TodoApp() {
     try {
       setShareBusy(true);
       setShareMsg("");
-      await createShare(shareCategory, email);
+      await createShare(shareCategory, email, perms);
       setShareMsg("Shared");
       if (!emailArg) setShareEmail("");
       return true;
@@ -228,7 +235,7 @@ export default function TodoApp() {
     }
   };
 
-  const handleShareMany = async (emails) => {
+  const handleShareMany = async (emails, permissionsArg) => {
     const list = Array.isArray(emails) ? emails : [];
     const cleaned = list
       .map((e) =>
@@ -243,6 +250,7 @@ export default function TodoApp() {
     }
     setShareBusy(true);
     setShareMsg("");
+    const perms = Array.isArray(permissionsArg) ? permissionsArg : ["read"];
     let ok = 0,
       fail = 0;
     for (const e of cleaned) {
@@ -251,7 +259,7 @@ export default function TodoApp() {
         continue;
       }
       try {
-        await createShare(shareCategory, e);
+        await createShare(shareCategory, e, perms);
         ok++;
       } catch {
         fail++;

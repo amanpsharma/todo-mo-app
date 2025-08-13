@@ -109,7 +109,7 @@ export async function GET(req) {
   return NextResponse.json({ error: "bad request" }, { status: 400 });
 }
 
-// POST: create share { category, viewerEmail }
+// POST: create share { category, viewerEmail, permissions?: string[] }
 export async function POST(req) {
   const decoded = await getAuthDecoded(req);
   if (!decoded)
@@ -121,6 +121,10 @@ export async function POST(req) {
   const body = await req.json();
   let category = (body.category || "").toString().trim().toLowerCase();
   const viewerEmail = (body.viewerEmail || "").toString().trim().toLowerCase();
+  const rawPerms = Array.isArray(body.permissions)
+    ? body.permissions
+    : ["read"];
+  const permissions = normalizePerms(rawPerms);
   if (!category || !viewerEmail)
     return NextResponse.json({ error: "missing fields" }, { status: 400 });
   if (category.length > 32) category = category.slice(0, 32);
@@ -150,6 +154,15 @@ export async function POST(req) {
     ],
   });
   if (existing) {
+    // If permissions changed, update existing doc
+    const changed =
+      JSON.stringify(existing.permissions || ["read"]) !==
+      JSON.stringify(permissions);
+    if (changed) {
+      await db
+        .collection("shares")
+        .updateOne({ _id: existing._id }, { $set: { permissions } });
+    }
     return NextResponse.json({ ok: true, id: existing._id.toString() });
   }
   const { insertedId } = await db.collection("shares").insertOne({
@@ -159,6 +172,7 @@ export async function POST(req) {
     category,
     viewerUid: viewerUid || null,
     viewerEmailLower: viewerEmail,
+    permissions,
     createdAt: Date.now(),
   });
   return NextResponse.json({ ok: true, id: insertedId.toString() });
@@ -203,4 +217,17 @@ export async function DELETE(req) {
   }
 
   return NextResponse.json({ error: "bad request" }, { status: 400 });
+}
+
+function normalizePerms(arr) {
+  const allowed = new Set(["read", "write", "edit", "delete"]);
+  const out = [];
+  (Array.isArray(arr) ? arr : []).forEach((p) => {
+    const k = String(p || "")
+      .toLowerCase()
+      .trim();
+    if (allowed.has(k) && !out.includes(k)) out.push(k);
+  });
+  if (!out.includes("read")) out.unshift("read");
+  return out;
 }

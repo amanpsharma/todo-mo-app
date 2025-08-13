@@ -1,6 +1,7 @@
 "use client";
 import React, { useMemo, useState, useEffect } from "react";
 import ConfirmModal from "../ui/ConfirmModal";
+import SharePermissionsModal from "./SharePermissionsModal";
 import { isValidEmail } from "../../lib/utils";
 
 function IconTrash({ className = "", ...props }) {
@@ -75,6 +76,8 @@ export default function SharesPanel({
   const [showSharePanel, setShowSharePanel] = useState(true);
   const [confirmRevoke, setConfirmRevoke] = useState(null); // { category, email }
   const [confirmLeave, setConfirmLeave] = useState(null); // { ownerUid, ownerLabel, category }
+  const [permModalOpen, setPermModalOpen] = useState(false);
+  const [selectedPerms, setSelectedPerms] = useState(["read"]);
 
   useEffect(() => {
     const t = setTimeout(() => setMySharesQueryDeb(mySharesQuery), 200);
@@ -367,28 +370,48 @@ export default function SharesPanel({
                 </div>
               )}
             </div>
-            <button
-              onClick={async () => {
-                if (emails.length > 0) {
-                  await onShareMany(emails);
-                  emails.forEach((e) => rememberEmail(e));
-                  setEmails([]);
-                  setShareEmail("");
-                } else {
-                  const ok = await onShare();
-                  const e = (shareEmail || "").trim().toLowerCase();
-                  if (ok && isValidEmail(e)) rememberEmail(e);
-                }
-              }}
-              disabled={shareBusy || (!shareEmail.trim() && !canShareMany)}
-              className="text-xs px-3 py-1 rounded bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-40"
-            >
-              {shareBusy
-                ? "Sharing…"
-                : emails.length > 0
-                ? "Share all"
-                : "Share"}
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-1">
+                {selectedPerms.map((p) => (
+                  <span
+                    key={p}
+                    className="px-1.5 py-0.5 rounded-full text-[10px] capitalize bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700"
+                  >
+                    {p}
+                  </span>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setPermModalOpen(true)}
+                className="text-xs px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                title="Select permissions"
+              >
+                Permissions
+              </button>
+              <button
+                onClick={async () => {
+                  if (emails.length > 0) {
+                    await onShareMany(emails, selectedPerms);
+                    emails.forEach((e) => rememberEmail(e));
+                    setEmails([]);
+                    setShareEmail("");
+                  } else {
+                    const ok = await onShare(selectedPerms);
+                    const e = (shareEmail || "").trim().toLowerCase();
+                    if (ok && isValidEmail(e)) rememberEmail(e);
+                  }
+                }}
+                disabled={shareBusy || (!shareEmail.trim() && !canShareMany)}
+                className="text-xs px-3 py-1 rounded bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-40"
+              >
+                {shareBusy
+                  ? "Sharing…"
+                  : emails.length > 0
+                  ? "Share all"
+                  : "Share"}
+              </button>
+            </div>
             {shareMsg && (
               <span className="text-[11px] text-neutral-700 dark:text-neutral-300">
                 {shareMsg}
@@ -653,6 +676,16 @@ export default function SharesPanel({
             setSharedView(null);
           }
           setConfirmLeave(null);
+        }}
+      />
+      {/* Permissions modal */}
+      <SharePermissionsModal
+        open={permModalOpen}
+        defaultPermissions={selectedPerms}
+        onCancel={() => setPermModalOpen(false)}
+        onConfirm={(perms) => {
+          setSelectedPerms(perms && perms.length ? perms : ["read"]);
+          setPermModalOpen(false);
         }}
       />
     </div>

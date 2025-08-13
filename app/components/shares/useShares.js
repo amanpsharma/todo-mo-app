@@ -47,7 +47,7 @@ export function useShares(uid) {
   }, [refresh]);
 
   const createShare = useCallback(
-    async (category, viewerEmail) => {
+    async (category, viewerEmail, permissions = ["read"]) => {
       if (!uid) return;
       const token = await getToken();
       const res = await fetch(`/api/shares`, {
@@ -56,7 +56,7 @@ export function useShares(uid) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ category, viewerEmail }),
+        body: JSON.stringify({ category, viewerEmail, permissions }),
       });
       if (!res.ok) throw new Error("Create share failed");
       await refresh();
