@@ -59,6 +59,7 @@ export default function SharesPanel({
   onShareMany,
   myShares,
   revokeShare,
+  createShare,
   sharedWithMe,
   leaveSharedCategory,
   loadSharedTodos,
@@ -78,6 +79,7 @@ export default function SharesPanel({
   const [confirmLeave, setConfirmLeave] = useState(null); // { ownerUid, ownerLabel, category }
   const [permModalOpen, setPermModalOpen] = useState(false);
   const [selectedPerms, setSelectedPerms] = useState(["read"]);
+  const [savingPermId, setSavingPermId] = useState(null); // share id while updating perms
 
   useEffect(() => {
     const t = setTimeout(() => setMySharesQueryDeb(mySharesQuery), 200);
@@ -202,7 +204,8 @@ export default function SharesPanel({
     }
   };
 
-  const canShareMany = emails.length > 0 && !shareBusy;
+  const hasChip = emails.length >= 1;
+  const hasManyChips = emails.length > 1;
   useEffect(() => {
     setEmailIndex(0);
   }, [emailFiltered.length]);
@@ -391,9 +394,14 @@ export default function SharesPanel({
               </button>
               <button
                 onClick={async () => {
-                  if (emails.length > 0) {
+                  if (hasManyChips) {
                     await onShareMany(emails, selectedPerms);
                     emails.forEach((e) => rememberEmail(e));
+                    setEmails([]);
+                    setShareEmail("");
+                  } else if (hasChip) {
+                    const ok = await onShare(selectedPerms, emails[0]);
+                    if (ok && isValidEmail(emails[0])) rememberEmail(emails[0]);
                     setEmails([]);
                     setShareEmail("");
                   } else {
@@ -402,14 +410,10 @@ export default function SharesPanel({
                     if (ok && isValidEmail(e)) rememberEmail(e);
                   }
                 }}
-                disabled={shareBusy || (!shareEmail.trim() && !canShareMany)}
+                disabled={shareBusy || (!shareEmail.trim() && !hasChip)}
                 className="text-xs px-3 py-1 rounded bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-40"
               >
-                {shareBusy
-                  ? "Sharing…"
-                  : emails.length > 0
-                  ? "Share all"
-                  : "Share"}
+                {shareBusy ? "Sharing…" : hasManyChips ? "Share all" : "Share"}
               </button>
             </div>
             {shareMsg && (
@@ -444,6 +448,26 @@ export default function SharesPanel({
                     const sid = typeof s.id === "string" ? s.id.trim() : "";
                     const itemKey =
                       sid || `${s.category}-${s.viewerEmailLower}-${idx}`;
+                    const currentPerms =
+                      Array.isArray(s.permissions) && s.permissions.length
+                        ? s.permissions
+                        : ["read"];
+                    const has = (p) => currentPerms.includes(p);
+                    const canToggle = !!createShare && savingPermId !== itemKey;
+                    const updatePerms = async (perm) => {
+                      if (!createShare) return;
+                      if (perm === "read") return; // always on
+                      try {
+                        setSavingPermId(itemKey);
+                        let next = currentPerms.slice();
+                        if (has(perm)) next = next.filter((x) => x !== perm);
+                        else next = Array.from(new Set([...next, perm]));
+                        if (!next.includes("read")) next.unshift("read");
+                        await createShare(s.category, s.viewerEmailLower, next);
+                      } finally {
+                        setSavingPermId(null);
+                      }
+                    };
                     return (
                       <li
                         key={itemKey}
@@ -458,19 +482,50 @@ export default function SharesPanel({
                             {s.viewerEmailLower}
                           </span>
                         </div>
-                        <button
-                          onClick={() =>
-                            setConfirmRevoke({
-                              category: s.category,
-                              email: s.viewerEmailLower,
-                            })
-                          }
-                          aria-label="Revoke access"
-                          title="Revoke access"
-                          className="shrink-0 p-1 rounded text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-                        >
-                          <IconTrash />
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {/* Permission chips */}
+                          <div className="hidden sm:flex items-center gap-1 mr-1">
+                            {["read", "write", "edit", "delete"].map((p) => (
+                              <button
+                                key={p}
+                                type="button"
+                                onClick={() => updatePerms(p)}
+                                disabled={!canToggle}
+                                className={`px-1.5 py-0.5 rounded-full text-[10px] capitalize border ${
+                                  has(p)
+                                    ? "bg-neutral-100 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700"
+                                    : "bg-transparent border-neutral-300 dark:border-neutral-700 text-neutral-400"
+                                } ${
+                                  p === "read"
+                                    ? "cursor-not-allowed opacity-70"
+                                    : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                }`}
+                                title={
+                                  p === "read"
+                                    ? "Read is always included"
+                                    : has(p)
+                                    ? `Remove ${p}`
+                                    : `Add ${p}`
+                                }
+                              >
+                                {p}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            onClick={() =>
+                              setConfirmRevoke({
+                                category: s.category,
+                                email: s.viewerEmailLower,
+                              })
+                            }
+                            aria-label="Revoke access"
+                            title="Revoke access"
+                            className="shrink-0 p-1 rounded text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                          >
+                            <IconTrash />
+                          </button>
+                        </div>
                       </li>
                     );
                   })}

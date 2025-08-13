@@ -182,6 +182,7 @@ export default function TodoApp() {
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [lastDeleted, setLastDeleted] = useState(null);
   const [toastOpen, setToastOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
   const [pendingRestore, setPendingRestore] = useState(null);
 
   // Shares
@@ -328,6 +329,13 @@ export default function TodoApp() {
     };
     run();
   }, [sharedView, uid, getToken]);
+
+  const showToast = (msg) => {
+    const m = String(msg || "");
+    if (!m) return;
+    setToastMessage(m);
+    setToastOpen(true);
+  };
 
   const leaveSharedCategory = hookLeaveSharedCategory
     ? hookLeaveSharedCategory
@@ -480,6 +488,7 @@ export default function TodoApp() {
         onShareMany={handleShareMany}
         myShares={myShares}
         revokeShare={revokeShare}
+        createShare={createShare}
         sharedWithMe={sharedWithMe}
         leaveSharedCategory={leaveSharedCategory}
         loadSharedTodos={loadSharedTodos}
@@ -539,7 +548,14 @@ export default function TodoApp() {
                 },
                 body: JSON.stringify(body),
               });
-              if (!res.ok) throw new Error("Edit failed");
+              if (!res.ok) {
+                if (res.status === 403)
+                  showToast(
+                    "You don't have permission to edit in this category."
+                  );
+                else showToast("Edit failed");
+                return;
+              }
               await loadSharedTodos(
                 sharedView.ownerUid,
                 sharedView.category,
@@ -574,6 +590,9 @@ export default function TodoApp() {
                 sharedView.category,
                 sharedView.ownerEmail
               );
+            else if (res.status === 403)
+              showToast("You don't have permission to edit in this category.");
+            else showToast("Update failed");
           }}
           removeTodo={async (id) => {
             const token = await getToken();
@@ -587,6 +606,11 @@ export default function TodoApp() {
                 sharedView.category,
                 sharedView.ownerEmail
               );
+            else if (res.status === 403)
+              showToast(
+                "You don't have permission to delete in this category."
+              );
+            else showToast("Delete failed");
           }}
           filter={filter}
         />
@@ -627,7 +651,9 @@ export default function TodoApp() {
       />
       <Toast
         open={toastOpen}
-        message={lastDeleted ? `Deleted: "${lastDeleted.text}"` : ""}
+        message={
+          toastMessage || (lastDeleted ? `Deleted: "${lastDeleted.text}"` : "")
+        }
         actionLabel={lastDeleted ? "Undo" : undefined}
         onAction={async () => {
           if (!lastDeleted) return;
@@ -638,11 +664,13 @@ export default function TodoApp() {
           });
           setToastOpen(false);
           setLastDeleted(null);
+          setToastMessage("");
           await addTodo(lastDeleted.text, lastDeleted.category || "general");
         }}
         onClose={() => {
           setToastOpen(false);
           setLastDeleted(null);
+          setToastMessage("");
         }}
       />
 
