@@ -2,7 +2,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import ConfirmModal from "../ui/ConfirmModal";
 import SharePermissionsModal from "./SharePermissionsModal";
-import { isValidEmail } from "../../lib/utils";
+import { isValidEmail, formatDateTime } from "../../lib/utils";
 
 function IconTrash({ className = "", ...props }) {
   return (
@@ -481,6 +481,14 @@ export default function SharesPanel({
                           <span className="truncate" title={s.viewerEmailLower}>
                             {s.viewerEmailLower}
                           </span>
+                          {s.createdAt ? (
+                            <span
+                              className="text-neutral-400 text-[10px] shrink-0"
+                              title={formatDateTime(s.createdAt)}
+                            >
+                              • {formatDateTime(s.createdAt)}
+                            </span>
+                          ) : null}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           {/* Permission chips */}
@@ -608,47 +616,62 @@ export default function SharesPanel({
                               </span>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                              {cats.map((c, idxCat) => (
-                                <div
-                                  key={`${ownerKey}-${c}-${idxCat}`}
-                                  className="flex items-center gap-1 group/cat"
-                                >
-                                  <button
-                                    onClick={() =>
-                                      loadSharedTodos(
-                                        o.ownerUid,
-                                        c,
-                                        o.ownerName ||
-                                          o.ownerEmail ||
-                                          o.ownerUid
-                                      )
-                                    }
-                                    className="px-2 py-0.5 rounded border capitalize hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                                    title={`View ${
-                                      o.ownerName || o.ownerEmail || o.ownerUid
-                                    }'s ${c}`}
+                              {cats.map((c, idxCat) => {
+                                const ts = o.categoriesMeta?.[c]?.createdAt;
+                                return (
+                                  <div
+                                    key={`${ownerKey}-${c}-${idxCat}`}
+                                    className="flex items-center gap-1 group/cat"
                                   >
-                                    {c}
-                                  </button>
-                                  <button
-                                    onClick={() =>
-                                      setConfirmLeave({
-                                        ownerUid: o.ownerUid,
-                                        ownerLabel:
-                                          o.ownerName ||
-                                          o.ownerEmail ||
+                                    <button
+                                      onClick={() =>
+                                        loadSharedTodos(
                                           o.ownerUid,
-                                        category: c,
-                                      })
-                                    }
-                                    aria-label="Leave this shared category"
-                                    title="Leave this shared category"
-                                    className="p-1 rounded text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 transition opacity-100 sm:opacity-0 sm:group-hover/cat:opacity-100"
-                                  >
-                                    <IconExit />
-                                  </button>
-                                </div>
-                              ))}
+                                          c,
+                                          o.ownerName ||
+                                            o.ownerEmail ||
+                                            o.ownerUid
+                                        )
+                                      }
+                                      className="px-2 py-0.5 rounded border capitalize hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                      title={`View ${
+                                        o.ownerName ||
+                                        o.ownerEmail ||
+                                        o.ownerUid
+                                      }'s ${c}${
+                                        ts ? ` • ${formatDateTime(ts)}` : ""
+                                      }`}
+                                    >
+                                      {c}
+                                    </button>
+                                    {ts ? (
+                                      <span
+                                        className="text-neutral-400 text-[10px]"
+                                        title={formatDateTime(ts)}
+                                      >
+                                        {formatDateTime(ts)}
+                                      </span>
+                                    ) : null}
+                                    <button
+                                      onClick={() =>
+                                        setConfirmLeave({
+                                          ownerUid: o.ownerUid,
+                                          ownerLabel:
+                                            o.ownerName ||
+                                            o.ownerEmail ||
+                                            o.ownerUid,
+                                          category: c,
+                                        })
+                                      }
+                                      aria-label="Leave this shared category"
+                                      title="Leave this shared category"
+                                      className="p-1 rounded text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 transition opacity-100 sm:opacity-0 sm:group-hover/cat:opacity-100"
+                                    >
+                                      <IconExit />
+                                    </button>
+                                  </div>
+                                );
+                              })}
                               {remaining > 0 && (
                                 <button
                                   onClick={() =>

@@ -135,11 +135,65 @@ export default function TodoApp() {
     setCreateCategory("");
   };
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     const text = input.trim();
     if (!text) return;
-    addTodo(text, newCategory || "general");
+    // Shared view: add to owner's list if allowed, else toast
+    if (sharedView) {
+      const cat = sharedView.category || "general";
+      if (!Array.isArray(sharedPerms) || !sharedPerms.includes("write")) {
+        showToast("You don't have permission to add in this category.");
+        return;
+      }
+      // optimistic add
+      const tempId = `tmp-${Date.now()}`;
+      const optimistic = {
+        id: tempId,
+        uid: sharedView.ownerUid,
+        text,
+        completed: false,
+        createdAt: Date.now(),
+        category: cat,
+      };
+      const prev = sharedTodos;
+      setSharedTodos((curr) => [optimistic, ...(curr || [])]);
+      setInput("");
+      try {
+        const token = await getToken();
+        const res = await fetch(`/api/todos`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            text,
+            category: cat,
+            ownerUid: sharedView.ownerUid,
+          }),
+        });
+        if (!res.ok) {
+          if (res.status === 403)
+            showToast("You don't have permission to add in this category.");
+          else showToast("Add failed");
+          setSharedTodos(prev); // revert
+          return;
+        }
+        const created = await res.json();
+        setSharedTodos((curr) =>
+          (curr || []).map((t) =>
+            t.id === tempId ? { ...optimistic, ...created } : t
+          )
+        );
+      } catch {
+        showToast("Add failed");
+        setSharedTodos(prev);
+      }
+      return;
+    }
+    // Own list
+    await addTodo(text, newCategory || "general");
     setInput("");
   };
 
@@ -538,6 +592,23 @@ export default function TodoApp() {
             if (!text) return;
             try {
               const token = await getToken();
+              // optimistic update
+              const prev = sharedTodos;
+              const nextCategory = editingCategory || "general";
+              const isSameCategory =
+                (sharedView?.category || "general") === nextCategory;
+              setSharedTodos((curr) => {
+                const list = Array.isArray(curr) ? curr.slice() : [];
+                if (isSameCategory) {
+                  return list.map((t) =>
+                    t.id === editingId
+                      ? { ...t, text, category: nextCategory }
+                      : t
+                  );
+                }
+                // moved out of the viewed category, remove it from list
+                return list.filter((t) => t.id !== editingId);
+              });
               const body = { id: editingId, text };
               if (editingCategory) body.category = editingCategory;
               const res = await fetch(`/api/todos`, {
@@ -554,13 +625,10 @@ export default function TodoApp() {
                     "You don't have permission to edit in this category."
                   );
                 else showToast("Edit failed");
+                // revert optimistic change
+                setSharedTodos(prev);
                 return;
               }
-              await loadSharedTodos(
-                sharedView.ownerUid,
-                sharedView.category,
-                sharedView.ownerEmail
-              );
             } finally {
               setEditingId(null);
               setEditingText("");
@@ -576,6 +644,13 @@ export default function TodoApp() {
             const t = sharedTodos.find((x) => x.id === id);
             if (!t) return;
             const token = await getToken();
+            // optimistic toggle
+            const prev = sharedTodos;
+            setSharedTodos((curr) =>
+              (curr || []).map((x) =>
+                x.id === id ? { ...x, completed: !t.completed } : x
+              )
+            );
             const res = await fetch(`/api/todos`, {
               method: "PATCH",
               headers: {
@@ -584,33 +659,34 @@ export default function TodoApp() {
               },
               body: JSON.stringify({ id, completed: !t.completed }),
             });
-            if (res.ok)
-              await loadSharedTodos(
-                sharedView.ownerUid,
-                sharedView.category,
-                sharedView.ownerEmail
-              );
-            else if (res.status === 403)
-              showToast("You don't have permission to edit in this category.");
-            else showToast("Update failed");
+            if (!res.ok) {
+              if (res.status === 403)
+                showToast(
+                  "You don't have permission to edit in this category."
+                );
+              else showToast("Update failed");
+              // revert
+              setSharedTodos(prev);
+            }
           }}
           removeTodo={async (id) => {
             const token = await getToken();
+            // optimistic remove
+            const prev = sharedTodos;
+            setSharedTodos((curr) => (curr || []).filter((t) => t.id !== id));
             const res = await fetch(`/api/todos?id=${encodeURIComponent(id)}`, {
               method: "DELETE",
               headers: { Authorization: `Bearer ${token}` },
             });
-            if (res.ok)
-              await loadSharedTodos(
-                sharedView.ownerUid,
-                sharedView.category,
-                sharedView.ownerEmail
-              );
-            else if (res.status === 403)
-              showToast(
-                "You don't have permission to delete in this category."
-              );
-            else showToast("Delete failed");
+            if (!res.ok) {
+              if (res.status === 403)
+                showToast(
+                  "You don't have permission to delete in this category."
+                );
+              else showToast("Delete failed");
+              // revert
+              setSharedTodos(prev);
+            }
           }}
           filter={filter}
         />

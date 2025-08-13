@@ -99,9 +99,12 @@ export async function GET(req) {
           ownerEmail: s.ownerEmail || null,
           ownerName: s.ownerName || null,
           categories: [],
+          categoriesMeta: {}, // { [category]: { createdAt } }
         };
       if (!grouped[key].categories.includes(s.category))
         grouped[key].categories.push(s.category);
+      if (!grouped[key].categoriesMeta[s.category])
+        grouped[key].categoriesMeta[s.category] = { createdAt: s.createdAt };
     }
     // Enrich with display names when Admin is available
     if (ensureAdmin()) {

@@ -17,6 +17,7 @@ import {
   signOut,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  updateProfile,
 } from "firebase/auth";
 
 const AuthContext = createContext(null);
@@ -98,6 +99,22 @@ export function AuthProvider({ children }) {
     [auth]
   );
 
+  const updateUserProfile = useCallback(
+    async ({ displayName, photoURL }) => {
+      if (!auth || !auth.currentUser) throw new Error("Not authenticated");
+      await updateProfile(auth.currentUser, {
+        displayName: displayName ?? auth.currentUser.displayName ?? null,
+        photoURL: photoURL ?? auth.currentUser.photoURL ?? null,
+      });
+      // refresh local user state
+      setUser({ ...auth.currentUser });
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("auth:state"));
+      }
+    },
+    [auth]
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -108,6 +125,7 @@ export function AuthProvider({ children }) {
         logout,
         signupEmail,
         loginEmail,
+        updateUserProfile,
         firebaseConfig: status,
       }}
     >

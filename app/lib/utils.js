@@ -30,3 +30,21 @@ export async function getAuthToken() {
   if (!token) throw new Error("No auth token");
   return token;
 }
+
+// Format a timestamp to a user-friendly local date and time
+export function formatDateTime(ts, includeTime = true) {
+  if (!ts) return "";
+  try {
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return "";
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yy = String(d.getFullYear()).slice(-2);
+    if (!includeTime) return `${dd}/${mm}/${yy}`;
+    const hh = String(d.getHours()).padStart(2, "0");
+    const min = String(d.getMinutes()).padStart(2, "0");
+    return `${dd}/${mm}/${yy} ${hh}:${min}`;
+  } catch {
+    return "";
+  }
+}

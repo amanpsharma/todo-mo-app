@@ -1,13 +1,19 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthProvider";
+import ProfileModal from "./ProfileModal";
 import Image from "next/image";
 import { motion } from "framer-motion";
 
 export default function HeaderAuth() {
-  const { user, loading, loginGoogle, logout, error } = useAuth();
+  const { user, loading, loginGoogle, logout, error, updateUserProfile } =
+    useAuth();
   const [theme, setTheme] = useState("system");
   const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  const buttonRef = useRef(null);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
     const stored =
@@ -40,6 +46,31 @@ export default function HeaderAuth() {
     }
     return;
   }, [theme]);
+
+  // Close menu on outside click or Escape
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDocClick = (e) => {
+      const t = e.target;
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(t) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(t)
+      ) {
+        setMenuOpen(false);
+      }
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
 
   return (
     <div className="sticky top-0 z-40 mb-6">
@@ -95,29 +126,107 @@ export default function HeaderAuth() {
               )}
 
               {!loading && user && (
-                <div className="flex items-center gap-2">
-                  {user.photoURL && (
-                    <Image
-                      src={user.photoURL}
-                      alt="avatar"
-                      width={26}
-                      height={26}
-                      className="rounded-full"
-                    />
-                  )}
-                  <span
-                    className="text-xs max-w-[120px] truncate hidden sm:inline"
-                    title={user.email || user.displayName}
-                  >
-                    {user.displayName || user.email}
-                  </span>
+                <div className="relative">
                   <motion.button
+                    ref={buttonRef}
+                    aria-label="User menu"
+                    aria-haspopup="menu"
+                    aria-expanded={menuOpen}
                     whileTap={{ scale: 0.98 }}
-                    onClick={logout}
-                    className="text-xs px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                    onClick={() => setMenuOpen((v) => !v)}
+                    className="size-8 rounded-full overflow-hidden border border-neutral-300 dark:border-neutral-700 flex items-center justify-center bg-neutral-100 dark:bg-neutral-800"
                   >
-                    Logout
+                    {user.photoURL ? (
+                      <Image
+                        src={user.photoURL}
+                        alt=""
+                        width={32}
+                        height={32}
+                        className="rounded-full"
+                      />
+                    ) : (
+                      <span className="text-[11px] font-medium text-neutral-700 dark:text-neutral-200">
+                        {(user.displayName || user.email || "U")
+                          .charAt(0)
+                          .toUpperCase()}
+                      </span>
+                    )}
                   </motion.button>
+
+                  {menuOpen && (
+                    <motion.div
+                      ref={menuRef}
+                      role="menu"
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.12, ease: "easeOut" }}
+                      className="absolute right-0 mt-2 w-60 rounded-md border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-lg overflow-hidden z-50"
+                    >
+                      <div className="p-3 border-b border-neutral-200 dark:border-neutral-800">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="size-8 rounded-full overflow-hidden border border-neutral-300 dark:border-neutral-700 flex items-center justify-center bg-neutral-100 dark:bg-neutral-800 shrink-0">
+                            {user.photoURL ? (
+                              <Image
+                                src={user.photoURL}
+                                alt=""
+                                width={32}
+                                height={32}
+                                className="rounded-full"
+                              />
+                            ) : (
+                              <span className="text-xs font-medium text-neutral-700 dark:text-neutral-200">
+                                {(user.displayName || user.email || "U")
+                                  .charAt(0)
+                                  .toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div
+                              className="text-xs font-medium text-neutral-900 dark:text-neutral-100 truncate"
+                              title={user.displayName || user.email}
+                            >
+                              {user.displayName ||
+                                (user.email
+                                  ? user.email.split("@")[0]
+                                  : "User")}
+                            </div>
+                            {user.email && (
+                              <div
+                                className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate"
+                                title={user.email}
+                              >
+                                {user.email}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="p-2">
+                        <button
+                          role="menuitem"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            setProfileOpen(true);
+                          }}
+                          className="w-full text-left text-xs px-2 py-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-900 dark:text-neutral-100"
+                        >
+                          Edit profile
+                        </button>
+                        <button
+                          role="menuitem"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            logout();
+                          }}
+                          className="w-full text-left text-xs px-2 py-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-900 dark:text-neutral-100"
+                        >
+                          Logout
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
                 </div>
               )}
             </div>
@@ -132,6 +241,18 @@ export default function HeaderAuth() {
           </div>
         </div>
       )}
+      <ProfileModal
+        open={profileOpen}
+        onCancel={() => setProfileOpen(false)}
+        onSave={async (values) => {
+          await updateUserProfile(values);
+          setProfileOpen(false);
+        }}
+        initial={{
+          displayName: user?.displayName || "",
+          photoURL: user?.photoURL || "",
+        }}
+      />
     </div>
   );
 }
