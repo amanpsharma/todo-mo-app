@@ -61,7 +61,7 @@ export default function SharesPanel({
   loadSharedTodos,
   sharedError,
 }) {
-  // Local UI scaling state
+  // Local UI state
   const [mySharesQuery, setMySharesQuery] = useState("");
   const [mySharesQueryDeb, setMySharesQueryDeb] = useState("");
   const [mySharesLimit, setMySharesLimit] = useState(20);
@@ -69,6 +69,8 @@ export default function SharesPanel({
   const [sharedQueryDeb, setSharedQueryDeb] = useState("");
   const [sharedOwnersLimit, setSharedOwnersLimit] = useState(20);
   const [showAllCats, setShowAllCats] = useState({});
+  const [showSharedWithYou, setShowSharedWithYou] = useState(true);
+  const [showSharePanel, setShowSharePanel] = useState(true);
   const [confirmRevoke, setConfirmRevoke] = useState(null); // { category, email }
   const [confirmLeave, setConfirmLeave] = useState(null); // { ownerUid, ownerLabel, category }
 
@@ -80,6 +82,21 @@ export default function SharesPanel({
     const t = setTimeout(() => setSharedQueryDeb(sharedQuery), 200);
     return () => clearTimeout(t);
   }, [sharedQuery]);
+  // Persist show/hide of the entire share panel across reloads
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("todo:sharePanelVisible");
+      if (saved === "0") setShowSharePanel(false);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "todo:sharePanelVisible",
+        showSharePanel ? "1" : "0"
+      );
+    } catch {}
+  }, [showSharePanel]);
 
   const filteredMyShares = useMemo(() => {
     const q = mySharesQueryDeb.trim().toLowerCase();
@@ -126,226 +143,263 @@ export default function SharesPanel({
         <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
           Share category (view-only)
         </h3>
-        {sharedView && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setSharedView(null)}
+            onClick={() => setShowSharePanel((v) => !v)}
+            aria-expanded={showSharePanel}
             className="text-xs px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-            title="Back to my todos"
+            title={showSharePanel ? "Hide sharing panel" : "Show sharing panel"}
           >
-            Exit shared view
+            {showSharePanel ? "Hide" : "Show"}
           </button>
-        )}
+          {sharedView && (
+            <button
+              onClick={() => setSharedView(null)}
+              className="text-xs px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              title="Back to my todos"
+            >
+              Exit shared view
+            </button>
+          )}
+        </div>
       </div>
-      <div className="flex flex-wrap gap-2 items-center">
-        <select
-          value={shareCategory}
-          onChange={(e) => setShareCategory(e.target.value)}
-          className="rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-1 text-xs text-neutral-900 dark:text-neutral-100"
-        >
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c.charAt(0).toUpperCase() + c.slice(1)}
-            </option>
-          ))}
-        </select>
-        <input
-          type="email"
-          placeholder="Viewer email"
-          value={shareEmail}
-          onChange={(e) => setShareEmail(e.target.value)}
-          className="flex-1 min-w-40 rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-1 text-xs text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500"
-        />
-        <button
-          onClick={onShare}
-          disabled={shareBusy || !shareEmail.trim()}
-          className="text-xs px-3 py-1 rounded bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-40"
-        >
-          {shareBusy ? "Sharing…" : "Share"}
-        </button>
-        {shareMsg && (
-          <span className="text-[11px] text-neutral-700 dark:text-neutral-300">
-            {shareMsg}
-          </span>
-        )}
-      </div>
-
-      {!!(myShares && myShares.length) && (
-        <div className="text-[11px] text-neutral-600 dark:text-neutral-400">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <div className="font-medium">You shared</div>
-            <div className="flex items-center gap-2">
-              <input
-                value={mySharesQuery}
-                onChange={(e) => {
-                  setMySharesQuery(e.target.value);
-                  setMySharesLimit(20);
-                }}
-                placeholder="Filter by email or category"
-                className="rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-1 text-[11px] min-w-48"
-              />
-              <span className="text-neutral-400 whitespace-nowrap">
-                {visibleMyShares.length}/{filteredMyShares.length}
-              </span>
-            </div>
-          </div>
-          <div className="max-h-56 overflow-y-auto scroll-thin pr-1">
-            <ul className="flex flex-col gap-1">
-              {visibleMyShares.map((s) => (
-                <li
-                  key={s.id}
-                  className="px-2 py-1 rounded border text-xs flex items-center gap-3 justify-between group"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 capitalize">
-                      {s.category}
-                    </span>
-                    <span className="text-neutral-400 shrink-0">→</span>
-                    <span className="truncate" title={s.viewerEmailLower}>
-                      {s.viewerEmailLower}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() =>
-                      setConfirmRevoke({
-                        category: s.category,
-                        email: s.viewerEmailLower,
-                      })
-                    }
-                    aria-label="Revoke access"
-                    title="Revoke access"
-                    className="shrink-0 p-1 rounded text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-                  >
-                    <IconTrash />
-                  </button>
-                </li>
+      {showSharePanel && (
+        <>
+          <div className="flex flex-wrap gap-2 items-center">
+            <select
+              value={shareCategory}
+              onChange={(e) => setShareCategory(e.target.value)}
+              className="rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-1 text-xs text-neutral-900 dark:text-neutral-100"
+            >
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c.charAt(0).toUpperCase() + c.slice(1)}
+                </option>
               ))}
-            </ul>
-          </div>
-          {filteredMyShares.length > mySharesLimit && (
-            <div className="mt-2 text-center">
-              <button
-                onClick={() => setMySharesLimit((n) => n + 20)}
-                className="px-3 py-1 rounded border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-[11px]"
-              >
-                Load more
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {!!(sharedWithMe && sharedWithMe.length) && (
-        <div className="text-[11px] text-neutral-600 dark:text-neutral-400">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <div className="font-medium">Shared with you</div>
-            <div className="flex items-center gap-2">
-              <input
-                value={sharedQuery}
-                onChange={(e) => {
-                  setSharedQuery(e.target.value);
-                  setSharedOwnersLimit(20);
-                }}
-                placeholder="Filter by owner or category"
-                className="rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-1 text-[11px] min-w-48"
-              />
-              <span className="text-neutral-400 whitespace-nowrap">
-                {visibleSharedOwners.length}/{filteredSharedOwners.length}
+            </select>
+            <input
+              type="email"
+              placeholder="Viewer email"
+              value={shareEmail}
+              onChange={(e) => setShareEmail(e.target.value)}
+              className="flex-1 min-w-40 rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-1 text-xs text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500"
+            />
+            <button
+              onClick={onShare}
+              disabled={shareBusy || !shareEmail.trim()}
+              className="text-xs px-3 py-1 rounded bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-40"
+            >
+              {shareBusy ? "Sharing…" : "Share"}
+            </button>
+            {shareMsg && (
+              <span className="text-[11px] text-neutral-700 dark:text-neutral-300">
+                {shareMsg}
               </span>
-            </div>
+            )}
           </div>
-          <div className="max-h-56 overflow-y-auto scroll-thin pr-1">
-            <ul className="flex flex-col gap-2">
-              {visibleSharedOwners.map((o) => {
-                const cats = showAllCats[o.ownerUid]
-                  ? o.categories
-                  : (o.categories || []).slice(0, 12);
-                const remaining = (o.categories || []).length - cats.length;
-                return (
-                  <li
-                    key={o.ownerUid}
-                    className="px-2 py-1 rounded border text-xs flex flex-col gap-2"
+
+          {!!(myShares && myShares.length) && (
+            <div className="text-[11px] text-neutral-600 dark:text-neutral-400">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <div className="font-medium">You shared</div>
+                <div className="flex items-center gap-2">
+                  <input
+                    value={mySharesQuery}
+                    onChange={(e) => {
+                      setMySharesQuery(e.target.value);
+                      setMySharesLimit(20);
+                    }}
+                    placeholder="Filter by email or category"
+                    className="rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-1 text-[11px] min-w-48"
+                  />
+                  <span className="text-neutral-400 whitespace-nowrap">
+                    {visibleMyShares.length}/{filteredMyShares.length}
+                  </span>
+                </div>
+              </div>
+              <div className="max-h-56 overflow-y-auto scroll-thin pr-1">
+                <ul className="flex flex-col gap-1">
+                  {visibleMyShares.map((s) => (
+                    <li
+                      key={s.id}
+                      className="px-2 py-1 rounded border text-xs flex items-center gap-3 justify-between group"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 capitalize">
+                          {s.category}
+                        </span>
+                        <span className="text-neutral-400 shrink-0">→</span>
+                        <span className="truncate" title={s.viewerEmailLower}>
+                          {s.viewerEmailLower}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() =>
+                          setConfirmRevoke({
+                            category: s.category,
+                            email: s.viewerEmailLower,
+                          })
+                        }
+                        aria-label="Revoke access"
+                        title="Revoke access"
+                        className="shrink-0 p-1 rounded text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                      >
+                        <IconTrash />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              {filteredMyShares.length > mySharesLimit && (
+                <div className="mt-2 text-center">
+                  <button
+                    onClick={() => setMySharesLimit((n) => n + 20)}
+                    className="px-3 py-1 rounded border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-[11px]"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium truncate">
-                        {o.ownerName || o.ownerEmail || o.ownerUid}
-                      </span>
-                      <span className="text-neutral-400">•</span>
-                      <span className="text-neutral-500">
-                        {(o.categories || []).length} categories
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {cats.map((c) => (
-                        <div
-                          key={c}
-                          className="flex items-center gap-1 group/cat"
-                        >
-                          <button
-                            onClick={() =>
-                              loadSharedTodos(
-                                o.ownerUid,
-                                c,
-                                o.ownerName || o.ownerEmail || o.ownerUid
-                              )
-                            }
-                            className="px-2 py-0.5 rounded border capitalize hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                            title={`View ${
-                              o.ownerName || o.ownerEmail || o.ownerUid
-                            }'s ${c}`}
-                          >
-                            {c}
-                          </button>
-                          <button
-                            onClick={() =>
-                              setConfirmLeave({
-                                ownerUid: o.ownerUid,
-                                ownerLabel:
-                                  o.ownerName || o.ownerEmail || o.ownerUid,
-                                category: c,
-                              })
-                            }
-                            aria-label="Leave this shared category"
-                            title="Leave this shared category"
-                            className="p-1 rounded text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 transition opacity-100 sm:opacity-0 sm:group-hover/cat:opacity-100"
-                          >
-                            <IconExit />
-                          </button>
-                        </div>
-                      ))}
-                      {remaining > 0 && (
-                        <button
-                          onClick={() =>
-                            setShowAllCats((m) => ({
-                              ...m,
-                              [o.ownerUid]: true,
-                            }))
-                          }
-                          className="px-2 py-0.5 rounded border hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                          title={`Show ${remaining} more`}
-                        >
-                          +{remaining} more
-                        </button>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-          {filteredSharedOwners.length > sharedOwnersLimit && (
-            <div className="mt-2 text-center">
-              <button
-                onClick={() => setSharedOwnersLimit((n) => n + 20)}
-                className="px-3 py-1 rounded border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-[11px]"
-              >
-                Load more
-              </button>
+                    Load more
+                  </button>
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
-      {sharedError && (
-        <div className="text-red-600 mt-1">{String(sharedError)}</div>
+
+          {!!(sharedWithMe && sharedWithMe.length) && (
+            <div className="text-[11px] text-neutral-600 dark:text-neutral-400">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <div className="font-medium">Shared with you</div>
+                <button
+                  onClick={() => setShowSharedWithYou((v) => !v)}
+                  className="px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                  title={
+                    showSharedWithYou
+                      ? "Hide shared categories"
+                      : "Show shared categories"
+                  }
+                >
+                  {showSharedWithYou ? "Hide" : "Show"}
+                </button>
+              </div>
+              {showSharedWithYou && (
+                <>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={sharedQuery}
+                        onChange={(e) => {
+                          setSharedQuery(e.target.value);
+                          setSharedOwnersLimit(20);
+                        }}
+                        placeholder="Filter by owner or category"
+                        className="rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-1 text-[11px] min-w-48"
+                      />
+                      <span className="text-neutral-400 whitespace-nowrap">
+                        {visibleSharedOwners.length}/
+                        {filteredSharedOwners.length}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="max-h-56 overflow-y-auto scroll-thin pr-1">
+                    <ul className="flex flex-col gap-2">
+                      {visibleSharedOwners.map((o) => {
+                        const cats = showAllCats[o.ownerUid]
+                          ? o.categories
+                          : (o.categories || []).slice(0, 12);
+                        const remaining =
+                          (o.categories || []).length - cats.length;
+                        return (
+                          <li
+                            key={o.ownerUid}
+                            className="px-2 py-1 rounded border text-xs flex flex-col gap-2"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium truncate">
+                                {o.ownerName || o.ownerEmail || o.ownerUid}
+                              </span>
+                              <span className="text-neutral-400">•</span>
+                              <span className="text-neutral-500">
+                                {(o.categories || []).length} categories
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {cats.map((c) => (
+                                <div
+                                  key={c}
+                                  className="flex items-center gap-1 group/cat"
+                                >
+                                  <button
+                                    onClick={() =>
+                                      loadSharedTodos(
+                                        o.ownerUid,
+                                        c,
+                                        o.ownerName ||
+                                          o.ownerEmail ||
+                                          o.ownerUid
+                                      )
+                                    }
+                                    className="px-2 py-0.5 rounded border capitalize hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                    title={`View ${
+                                      o.ownerName || o.ownerEmail || o.ownerUid
+                                    }'s ${c}`}
+                                  >
+                                    {c}
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      setConfirmLeave({
+                                        ownerUid: o.ownerUid,
+                                        ownerLabel:
+                                          o.ownerName ||
+                                          o.ownerEmail ||
+                                          o.ownerUid,
+                                        category: c,
+                                      })
+                                    }
+                                    aria-label="Leave this shared category"
+                                    title="Leave this shared category"
+                                    className="p-1 rounded text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 transition opacity-100 sm:opacity-0 sm:group-hover/cat:opacity-100"
+                                  >
+                                    <IconExit />
+                                  </button>
+                                </div>
+                              ))}
+                              {remaining > 0 && (
+                                <button
+                                  onClick={() =>
+                                    setShowAllCats((m) => ({
+                                      ...m,
+                                      [o.ownerUid]: true,
+                                    }))
+                                  }
+                                  className="px-2 py-0.5 rounded border hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                  title={`Show ${remaining} more`}
+                                >
+                                  +{remaining} more
+                                </button>
+                              )}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                  {filteredSharedOwners.length > sharedOwnersLimit && (
+                    <div className="mt-2 text-center">
+                      <button
+                        onClick={() => setSharedOwnersLimit((n) => n + 20)}
+                        className="px-3 py-1 rounded border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-[11px]"
+                      >
+                        Load more
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+          {sharedError && (
+            <div className="text-red-600 mt-1">{String(sharedError)}</div>
+          )}
+        </>
       )}
 
       {/* Revoke confirm modal */}

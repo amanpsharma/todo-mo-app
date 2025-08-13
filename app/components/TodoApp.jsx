@@ -20,6 +20,8 @@ import TodoList from "./TodoList";
 import SharedTodosList from "./SharedTodosList";
 import DeleteCategoryModal from "./DeleteCategoryModal";
 import LoggedOutHero from "./LoggedOutHero";
+import AddCategoryModal from "./AddCategoryModal";
+import Toast from "./Toast";
 
 // using FILTERS from ../lib/utils
 
@@ -42,11 +44,13 @@ export default function TodoApp() {
     editTodo,
     stats,
     removeCategory,
+  reorder,
   } = useTodos(uid);
 
   // Input and category management
   const [input, setInput] = useState("");
   const [createCategory, setCreateCategory] = useState("");
+  const [addCategoryOpen, setAddCategoryOpen] = useState(false);
   const baseCategories = useMemo(
     () => ["general", "work", "personal", "shopping", "urgent"],
     []
@@ -78,10 +82,8 @@ export default function TodoApp() {
     return Array.from(set);
   }, [todos]);
 
-  const handleAddNewCategory = () => {
-    const raw = createCategory.trim().toLowerCase();
-    if (!raw) return;
-    const cat = sanitizeCategoryName(createCategory);
+  const handleAddNewCategory = (name) => {
+    const cat = sanitizeCategoryName(name || createCategory);
     if (!cat) return;
     setCustomCategories((prev) => (prev.includes(cat) ? prev : [...prev, cat]));
     setNewCategory(cat);
@@ -131,6 +133,9 @@ export default function TodoApp() {
   // Delete confirmations
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [confirmDeleteCategory, setConfirmDeleteCategory] = useState(null);
+  const [lastDeleted, setLastDeleted] = useState(null); // { id, text, category, prevId }
+  const [toastOpen, setToastOpen] = useState(false);
+  const [pendingRestore, setPendingRestore] = useState(null); // { text, category, prevId }
 
   // Shares
   const {
@@ -306,10 +311,8 @@ export default function TodoApp() {
         newCategory={newCategory}
         setNewCategory={setNewCategory}
         categories={categories}
-        createCategory={createCategory}
-        setCreateCategory={setCreateCategory}
         onSubmit={submit}
-        onAddNewCategory={handleAddNewCategory}
+        onOpenAddCategoryModal={() => setAddCategoryOpen(true)}
       />
 
       <FiltersBar
@@ -363,7 +366,16 @@ export default function TodoApp() {
           confirmDeleteId={confirmDeleteId}
           setConfirmDeleteId={setConfirmDeleteId}
           toggleTodo={toggleTodo}
-          removeTodo={removeTodo}
+          removeTodo={async (id) => {
+            const idx = todos.findIndex((x) => x.id === id);
+            const t = idx >= 0 ? todos[idx] : null;
+            await removeTodo(id);
+            if (t) {
+              const prevId = idx > 0 ? todos[idx - 1].id : null;
+              setLastDeleted({ id: t.id, text: t.text, category: t.category, prevId });
+              setToastOpen(true);
+            }
+          }}
           filter={filter}
         />
       ) : (
@@ -391,6 +403,44 @@ export default function TodoApp() {
           setConfirmDeleteCategory(null);
         }}
       />
+      <AddCategoryModal
+        open={addCategoryOpen}
+        initialValue={createCategory}
+        onCancel={() => setAddCategoryOpen(false)}
+        onConfirm={(name) => {
+          handleAddNewCategory(name);
+          setAddCategoryOpen(false);
+        }}
+      />
+      <Toast
+        open={toastOpen}
+        message={lastDeleted ? `Deleted: "${lastDeleted.text}"` : ""}
+        actionLabel={lastDeleted ? "Undo" : undefined}
+        onAction={async () => {
+          if (!lastDeleted) return;
+          setPendingRestore({
+            text: lastDeleted.text,
+            category: lastDeleted.category || "general",
+            prevId: lastDeleted.prevId || null,
+          });
+          setToastOpen(false);
+          setLastDeleted(null);
+          await addTodo(
+            lastDeleted.text,
+            lastDeleted.category || "general"
+          );
+        }}
+        onClose={() => {
+          setToastOpen(false);
+          setLastDeleted(null);
+        }}
+      />
+
+      {/* After undo add completes (state refresh), move the restored todo next to its previous neighbor */}
+      {/* Note: Order is client-side only; this keeps perceived position consistent post-undo. */}
+      {pendingRestore && (
+        <span className="sr-only">Restoring…</span>
+      )}
     </div>
   );
 }

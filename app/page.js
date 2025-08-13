@@ -2,8 +2,25 @@ import { Suspense } from "react";
 import TodoApp from "./components/TodoApp"; // client component
 
 export const metadata = {
-  title: "Todo App",
-  description: "A simple todo list built with Next.js",
+  title: "Todo App | Organize Your Tasks",
+  description:
+    "A modern, intuitive todo list application built with Next.js and React. Manage your daily tasks efficiently with a clean, responsive interface.",
+  keywords: "todo, task manager, productivity, Next.js, React, todo list",
+  authors: [{ name: "Your Name" }],
+  viewport: "width=device-width, initial-scale=1",
+  openGraph: {
+    title: "Todo App | Organize Your Tasks",
+    description:
+      "A modern, intuitive todo list application built with Next.js and React.",
+    type: "website",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary",
+    title: "Todo App | Organize Your Tasks",
+    description:
+      "A modern, intuitive todo list application built with Next.js and React.",
+  },
 };
 
 export default function Home() {
