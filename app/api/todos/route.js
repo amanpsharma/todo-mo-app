@@ -37,6 +37,41 @@ async function getAuthDecoded(req) {
   }
 }
 
+function hasPerm(permissions, needed) {
+  const allowed = new Set(["read", "write", "edit", "delete"]);
+  const perms = Array.isArray(permissions) ? permissions : [];
+  const norm = new Set(
+    perms
+      .map((p) =>
+        String(p || "")
+          .toLowerCase()
+          .trim()
+      )
+      .filter((p) => allowed.has(p))
+  );
+  // read is always implied
+  norm.add("read");
+  return norm.has(needed);
+}
+
+async function ensureSharePermission(
+  db,
+  viewerDecoded,
+  ownerUid,
+  category,
+  needed
+) {
+  if (!viewerDecoded || !ownerUid || !category) return false;
+  const emailLower = (viewerDecoded.email || "").toLowerCase();
+  const share = await db.collection("shares").findOne({
+    ownerUid,
+    category,
+    $or: [{ viewerUid: viewerDecoded.uid }, { viewerEmailLower: emailLower }],
+  });
+  if (!share) return false;
+  return hasPerm(share.permissions || ["read"], needed);
+}
+
 export async function GET(req) {
   const decoded = await getAuthDecoded(req);
   if (!decoded)
@@ -94,9 +129,10 @@ export async function GET(req) {
 }
 
 export async function POST(req) {
-  const uid = await getAuthUid(req);
-  if (!uid)
+  const decoded = await getAuthDecoded(req);
+  if (!decoded)
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const uid = decoded.uid;
   const body = await req.json();
   const text = (body.text || "").trim();
   let category = (body.category || "general") + "";
@@ -106,8 +142,21 @@ export async function POST(req) {
   if (!text) return NextResponse.json({ error: "empty" }, { status: 400 });
   const db = await getDb();
   const now = Date.now();
+  // If creating on behalf of another owner via share
+  const ownerUid = (body.ownerUid || "").toString().trim();
+  const targetUid = ownerUid && ownerUid !== uid ? ownerUid : uid;
+  if (targetUid !== uid) {
+    const ok = await ensureSharePermission(
+      db,
+      decoded,
+      ownerUid,
+      category,
+      "write"
+    );
+    if (!ok) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
   const { insertedId } = await db.collection("todos").insertOne({
-    uid,
+    uid: targetUid,
     text,
     completed: false,
     createdAt: now,
@@ -115,7 +164,7 @@ export async function POST(req) {
   });
   return NextResponse.json({
     id: insertedId.toString(),
-    uid,
+    uid: targetUid,
     text,
     completed: false,
     createdAt: now,
@@ -124,14 +173,35 @@ export async function POST(req) {
 }
 
 export async function PATCH(req) {
-  const uid = await getAuthUid(req);
-  if (!uid)
+  const decoded = await getAuthDecoded(req);
+  if (!decoded)
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const uid = decoded.uid;
   const body = await req.json();
   const { id, text, completed, category } = body;
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
   const db = await getDb();
-  const filter = { _id: new (await import("mongodb")).ObjectId(id), uid };
+  const oid = new (await import("mongodb")).ObjectId(id);
+  const existing = await db.collection("todos").findOne({ _id: oid });
+  if (!existing)
+    return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  // Owner editing own todo
+  let actingOnUid = uid;
+  if (existing.uid !== uid) {
+    // Viewer editing owner's todo via share permission
+    const ok = await ensureSharePermission(
+      db,
+      decoded,
+      existing.uid,
+      existing.category || "general",
+      "edit"
+    );
+    if (!ok) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    actingOnUid = existing.uid;
+  }
+
+  const filter = { _id: oid, uid: actingOnUid };
   const update = { $set: {} };
   if (typeof text === "string") update.$set.text = text.trim();
   if (typeof completed === "boolean") update.$set.completed = completed;
@@ -139,6 +209,18 @@ export async function PATCH(req) {
     let cat = category.trim().toLowerCase();
     if (!cat) cat = "general";
     if (cat.length > 32) cat = cat.slice(0, 32);
+    // If changing category across owner, ensure viewer has edit on new category too
+    if (existing.uid !== uid) {
+      const ok2 = await ensureSharePermission(
+        db,
+        decoded,
+        existing.uid,
+        cat,
+        "edit"
+      );
+      if (!ok2)
+        return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
     update.$set.category = cat;
   }
   if (Object.keys(update.$set).length === 0)
@@ -147,7 +229,7 @@ export async function PATCH(req) {
   const doc = await db.collection("todos").findOne(filter);
   return NextResponse.json({
     id: doc._id.toString(),
-    uid,
+    uid: doc.uid,
     text: doc.text,
     completed: doc.completed,
     createdAt: doc.createdAt,
@@ -156,29 +238,75 @@ export async function PATCH(req) {
 }
 
 export async function DELETE(req) {
-  const uid = await getAuthUid(req);
-  if (!uid)
+  const decoded = await getAuthDecoded(req);
+  if (!decoded)
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const uid = decoded.uid;
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   const clearCompleted = searchParams.get("clearCompleted");
   const category = searchParams.get("category");
+  const ownerUid = (searchParams.get("ownerUid") || "").trim();
   const db = await getDb();
   if (clearCompleted === "1") {
-    await db.collection("todos").deleteMany({ uid, completed: true });
-    return NextResponse.json({ cleared: true });
+    const targetUid = ownerUid && ownerUid !== uid ? ownerUid : uid;
+    if (targetUid !== uid) {
+      const ok = await ensureSharePermission(
+        db,
+        decoded,
+        targetUid,
+        (category || "").trim().toLowerCase(),
+        "delete"
+      );
+      if (!ok)
+        return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    await db
+      .collection("todos")
+      .deleteMany({
+        uid: targetUid,
+        completed: true,
+        ...(category ? { category: category.trim().toLowerCase() } : {}),
+      });
+    return NextResponse.json({ cleared: true, ownerUid: targetUid });
   }
   if (category) {
     const cat = category.trim().toLowerCase();
-    const res = await db.collection("todos").deleteMany({ uid, category: cat });
+    const targetUid = ownerUid && ownerUid !== uid ? ownerUid : uid;
+    if (targetUid !== uid) {
+      const ok = await ensureSharePermission(
+        db,
+        decoded,
+        targetUid,
+        cat,
+        "delete"
+      );
+      if (!ok)
+        return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    const res = await db
+      .collection("todos")
+      .deleteMany({ uid: targetUid, category: cat });
     return NextResponse.json({
       clearedCategory: cat,
       deletedCount: res.deletedCount || 0,
     });
   }
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
-  await db
-    .collection("todos")
-    .deleteOne({ _id: new (await import("mongodb")).ObjectId(id), uid });
-  return NextResponse.json({ id });
+  const oid = new (await import("mongodb")).ObjectId(id);
+  const existing = await db.collection("todos").findOne({ _id: oid });
+  if (!existing)
+    return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (existing.uid !== uid) {
+    const ok = await ensureSharePermission(
+      db,
+      decoded,
+      existing.uid,
+      existing.category || "general",
+      "delete"
+    );
+    if (!ok) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+  await db.collection("todos").deleteOne({ _id: oid });
+  return NextResponse.json({ id, ownerUid: existing.uid });
 }

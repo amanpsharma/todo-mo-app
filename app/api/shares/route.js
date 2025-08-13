@@ -47,7 +47,30 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const my = searchParams.get("my");
   const sharedWithMe = searchParams.get("sharedWithMe");
+  const owner = (searchParams.get("owner") || "").trim();
+  const category = (searchParams.get("category") || "").trim().toLowerCase();
   const db = await getDb();
+
+  // Permissions lookup for a specific owner/category for this viewer
+  if (owner && category) {
+    const emailLower = (decoded.email || "").toLowerCase();
+    const rec = await db.collection("shares").findOne({
+      ownerUid: owner,
+      category,
+      $or: [{ viewerUid: uid }, { viewerEmailLower: emailLower }],
+    });
+    if (!rec) return NextResponse.json({ error: "not found" }, { status: 404 });
+    const { _id, ownerUid, viewerUid, viewerEmailLower, permissions } = rec;
+    return NextResponse.json({
+      id: _id.toString(),
+      ownerUid,
+      category,
+      permissions:
+        Array.isArray(permissions) && permissions.length
+          ? permissions
+          : ["read"],
+    });
+  }
 
   if (my === "1") {
     const list = await db

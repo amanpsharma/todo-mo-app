@@ -275,6 +275,7 @@ export default function TodoApp() {
   const [sharedView, setSharedView] = useState(null);
   const [sharedTodos, setSharedTodos] = useState([]);
   const [sharedLoading, setSharedLoading] = useState(false);
+  const [sharedPerms, setSharedPerms] = useState(["read"]);
   const urlInitializedRef = useRef(false);
   const getToken = getAuthToken;
 
@@ -298,6 +299,35 @@ export default function TodoApp() {
       setSharedLoading(false);
     }
   };
+
+  // Load permissions for current shared view
+  useEffect(() => {
+    const run = async () => {
+      if (!sharedView || !uid) return;
+      try {
+        const token = await getToken();
+        const res = await fetch(
+          `/api/shares?owner=${encodeURIComponent(
+            sharedView.ownerUid
+          )}&category=${encodeURIComponent(sharedView.category)}`,
+          { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+        );
+        if (!res.ok) {
+          setSharedPerms(["read"]);
+          return;
+        }
+        const j = await res.json();
+        const arr =
+          Array.isArray(j.permissions) && j.permissions.length
+            ? j.permissions
+            : ["read"];
+        setSharedPerms(arr);
+      } catch (e) {
+        setSharedPerms(["read"]);
+      }
+    };
+    run();
+  }, [sharedView, uid, getToken]);
 
   const leaveSharedCategory = hookLeaveSharedCategory
     ? hookLeaveSharedCategory
@@ -473,6 +503,91 @@ export default function TodoApp() {
           setConfirmDeleteId={setConfirmDeleteId}
           toggleTodo={toggleTodo}
           removeTodo={handleRemoveTodo}
+          filter={filter}
+        />
+      ) : Array.isArray(sharedPerms) &&
+        (sharedPerms.includes("edit") || sharedPerms.includes("delete")) ? (
+        <TodoList
+          visible={sharedTodos}
+          categories={Array.from(
+            new Set(sharedTodos.map((t) => t.category || "general"))
+          )}
+          loading={sharedLoading}
+          editingId={editingId}
+          editingText={editingText}
+          setEditingText={setEditingText}
+          editingCategory={editingCategory}
+          setEditingCategory={setEditingCategory}
+          startEdit={(todo) => {
+            setEditingId(todo.id);
+            setEditingText(todo.text);
+            setEditingCategory(todo.category || "general");
+          }}
+          saveEdit={async () => {
+            if (!editingId) return;
+            const text = editingText.trim();
+            if (!text) return;
+            try {
+              const token = await getToken();
+              const body = { id: editingId, text };
+              if (editingCategory) body.category = editingCategory;
+              const res = await fetch(`/api/todos`, {
+                method: "PATCH",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(body),
+              });
+              if (!res.ok) throw new Error("Edit failed");
+              await loadSharedTodos(
+                sharedView.ownerUid,
+                sharedView.category,
+                sharedView.ownerEmail
+              );
+            } finally {
+              setEditingId(null);
+              setEditingText("");
+            }
+          }}
+          cancelEdit={() => {
+            setEditingId(null);
+            setEditingText("");
+          }}
+          confirmDeleteId={confirmDeleteId}
+          setConfirmDeleteId={setConfirmDeleteId}
+          toggleTodo={async (id) => {
+            const t = sharedTodos.find((x) => x.id === id);
+            if (!t) return;
+            const token = await getToken();
+            const res = await fetch(`/api/todos`, {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ id, completed: !t.completed }),
+            });
+            if (res.ok)
+              await loadSharedTodos(
+                sharedView.ownerUid,
+                sharedView.category,
+                sharedView.ownerEmail
+              );
+          }}
+          removeTodo={async (id) => {
+            const token = await getToken();
+            const res = await fetch(`/api/todos?id=${encodeURIComponent(id)}`, {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (res.ok)
+              await loadSharedTodos(
+                sharedView.ownerUid,
+                sharedView.category,
+                sharedView.ownerEmail
+              );
+          }}
           filter={filter}
         />
       ) : (
