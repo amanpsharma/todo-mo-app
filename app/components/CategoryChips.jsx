@@ -23,17 +23,19 @@ export default function CategoryChips({
       >
         All
       </button>
-      {categories.map((c) => {
+      {categories.map((c, idx) => {
+        const key = (typeof c === "string" ? c.trim() : "") || `cat-${idx}`;
+        const label = key || "general";
         const isLast =
           categoriesWithTodos.includes(c) && categoriesWithTodos.length <= 1;
         const disabled = isLast;
         const title = isLast
-          ? `Cannot delete the last remaining category (${c})`
-          : `Delete ${c} (and its todos)`;
+          ? `Cannot delete the last remaining category (${label})`
+          : `Delete ${label} (and its todos)`;
         const isSelected = categoryFilter === c;
         return (
           <div
-            key={c}
+            key={key}
             className={`relative group inline-block rounded ${
               categoryFilter === c ? "bg-violet-50 dark:bg-violet-900/20" : ""
             }`}
@@ -45,16 +47,16 @@ export default function CategoryChips({
                   ? "bg-violet-600 text-white border-violet-600"
                   : "border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-800 dark:text-neutral-200"
               }`}
-              title={`Filter by ${c}`}
+              title={`Filter by ${label}`}
             >
-              {c}
+              {label}
             </button>
             <button
               onClick={() => {
                 if (disabled) return;
                 setConfirmDeleteCategory(c);
               }}
-              aria-label={`Delete ${c} category`}
+              aria-label={`Delete ${label} category`}
               className={`absolute -top-1 -right-1 size-4 rounded-full leading-none flex items-center justify-center text-[10px] shadow ${
                 isSelected
                   ? "opacity-100"

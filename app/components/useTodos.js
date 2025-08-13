@@ -131,7 +131,7 @@ export function useTodos(uid) {
 
   // Optimistic helper
   const safeRun = useCallback(
-    async (optimistic, fn) => {
+    async (optimistic, fn, options = {}) => {
       let revert;
       if (optimistic) revert = optimistic();
       try {
@@ -141,8 +141,10 @@ export function useTodos(uid) {
         if (revert) revert();
         setRemoteError(e);
       } finally {
-        // Refresh list to sync authoritative state
-        fetchTodos();
+        // Refresh list to sync authoritative state unless explicitly skipped
+        if (options.refresh !== false) {
+          fetchTodos();
+        }
       }
     },
     [fetchTodos]
@@ -194,7 +196,8 @@ export function useTodos(uid) {
             body: JSON.stringify({ id, completed: !t.completed }),
           });
           if (!res.ok) throw new Error("Toggle failed");
-        }
+        },
+        { refresh: false }
       );
     },
     [todos, uid, getToken, safeRun, fetchTodos]

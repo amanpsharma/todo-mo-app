@@ -6,8 +6,7 @@ export const metadata = {
   description:
     "A modern, intuitive todo list application built with Next.js and React. Manage your daily tasks efficiently with a clean, responsive interface.",
   keywords: "todo, task manager, productivity, Next.js, React, todo list",
-  authors: [{ name: "Your Name" }],
-  viewport: "width=device-width, initial-scale=1",
+  authors: [{ name: "Aman Sharma" }],
   openGraph: {
     title: "Todo App | Organize Your Tasks",
     description:
@@ -21,6 +20,12 @@ export const metadata = {
     description:
       "A modern, intuitive todo list application built with Next.js and React.",
   },
+};
+
+// Next.js expects viewport to be exported separately, not inside metadata
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function Home() {
