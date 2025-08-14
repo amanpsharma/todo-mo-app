@@ -1,21 +1,10 @@
 "use client";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { FiCheck, FiEdit2, FiTrash2 } from "react-icons/fi";
 
 function IconCheck({ className = "" }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="3"
-      className={`w-3.5 h-3.5 ${className}`}
-      aria-hidden="true"
-    >
-      <path d="M5 13l4 4L19 7" />
-    </svg>
-  );
+  return <FiCheck className={`w-3.5 h-3.5 ${className}`} aria-hidden />;
 }
 
 function CheckToggle({ checked, onToggle }) {
@@ -76,9 +65,14 @@ export default function TodoList({
   toggleTodo,
   removeTodo,
   filter,
+  allowEdit = true,
+  onBlockedEdit,
+  allowDelete = true,
+  onBlockedDelete,
 }) {
   const prefersReducedMotion = useReducedMotion();
   const [selectedId, setSelectedId] = useState(null);
+  const [suppressHoverId, setSuppressHoverId] = useState(null);
   const listRef = useRef(null);
 
   // Dismiss selection on outside click
@@ -161,7 +155,19 @@ export default function TodoList({
                 layout
                 variants={itemVariants}
                 key={itemKey}
-                onClick={() => setSelectedId(todo.id)}
+                onClick={() => {
+                  if (selectedId === todo.id) {
+                    // Clicking again hides actions for this row and suppresses hover reveal on desktop
+                    setSelectedId(null);
+                    setSuppressHoverId(todo.id);
+                  } else {
+                    setSelectedId(todo.id);
+                    setSuppressHoverId(null);
+                  }
+                }}
+                onMouseLeave={() => {
+                  if (suppressHoverId === todo.id) setSuppressHoverId(null);
+                }}
                 className={`relative group flex items-start gap-3 rounded border border-neutral-300 dark:border-neutral-700 bg-white/70 dark:bg-neutral-900/60 px-3 py-2 shadow-sm cursor-pointer ${
                   isNew && !prefersReducedMotion
                     ? "ring-2 ring-violet-300/60"
@@ -211,100 +217,107 @@ export default function TodoList({
                         className="w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white/90 dark:bg-neutral-800 px-2 py-1 text-sm"
                       />
                     )}
-                    <div
-                      className={`mt-1 flex flex-wrap gap-2 text-xs items-center transition-opacity ${
+                    {(() => {
+                      const actionsVisibilityClass =
                         isEditing || selectedId === todo.id
                           ? "opacity-100"
-                          : "opacity-0 sm:group-hover:opacity-100"
-                      }`}
-                    >
-                      {!isEditing && (
-                        <motion.button
-                          whileTap={{ scale: 0.96 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            startEdit(todo);
-                          }}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30"
-                          title="Edit"
+                          : suppressHoverId === todo.id
+                          ? // keep hidden on desktop (no hover reveal) until mouse leaves
+                            "opacity-100 sm:opacity-0"
+                          : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100";
+                      return (
+                        <div
+                          className={`mt-1 flex flex-wrap gap-2 text-xs items-center transition-opacity ${actionsVisibilityClass}`}
                         >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            className="w-3.5 h-3.5"
-                            aria-hidden="true"
-                          >
-                            <path d="M12 20h9" />
-                            <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z" />
-                          </svg>
-                          <span>Edit</span>
-                        </motion.button>
-                      )}
-                      {isEditing && (
-                        <>
-                          <select
-                            value={editingCategory}
-                            onChange={(e) => setEditingCategory(e.target.value)}
-                            className="rounded border border-neutral-300 dark:border-neutral-600 bg-white/80 dark:bg-neutral-800 px-2 py-1 text-[11px]"
-                          >
-                            {categories.map((c) => (
-                              <option key={c} value={c}>
-                                {c.charAt(0).toUpperCase() + c.slice(1)}
-                              </option>
-                            ))}
-                          </select>
+                          {!isEditing && (
+                            <motion.button
+                              whileTap={{ scale: 0.96 }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!allowEdit) {
+                                  onBlockedEdit?.();
+                                  return;
+                                }
+                                startEdit(todo);
+                              }}
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 ${
+                                allowEdit
+                                  ? "text-blue-700 dark:text-blue-300"
+                                  : "text-neutral-400 dark:text-neutral-500 cursor-not-allowed opacity-60 hover:bg-transparent"
+                              }`}
+                              title={
+                                allowEdit ? "Edit" : "No permission to edit"
+                              }
+                              aria-disabled={!allowEdit}
+                            >
+                              <FiEdit2 className="w-3.5 h-3.5" aria-hidden />
+                              <span>Edit</span>
+                            </motion.button>
+                          )}
+                          {isEditing && (
+                            <>
+                              <select
+                                value={editingCategory}
+                                onChange={(e) =>
+                                  setEditingCategory(e.target.value)
+                                }
+                                className="rounded border border-neutral-300 dark:border-neutral-600 bg-white/80 dark:bg-neutral-800 px-2 py-1 text-[11px]"
+                              >
+                                {categories.map((c) => (
+                                  <option key={c} value={c}>
+                                    {c.charAt(0).toUpperCase() + c.slice(1)}
+                                  </option>
+                                ))}
+                              </select>
+                              <motion.button
+                                whileTap={{ scale: 0.96 }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  saveEdit();
+                                }}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30 disabled:opacity-60"
+                                disabled={!editingText.trim()}
+                              >
+                                Save
+                              </motion.button>
+                              <motion.button
+                                whileTap={{ scale: 0.96 }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  cancelEdit();
+                                }}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                              >
+                                Cancel
+                              </motion.button>
+                            </>
+                          )}
                           <motion.button
                             whileTap={{ scale: 0.96 }}
                             onClick={(e) => {
                               e.stopPropagation();
-                              saveEdit();
+                              if (!allowDelete) {
+                                onBlockedDelete?.();
+                                return;
+                              }
+                              setConfirmDeleteId(todo.id);
                             }}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30 disabled:opacity-60"
-                            disabled={!editingText.trim()}
+                            className={`inline-flex items-center gap-1 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 hover:bg-red-50 dark:hover:bg-red-900/30 ${
+                              allowDelete
+                                ? "text-red-700 dark:text-red-300"
+                                : "text-neutral-400 dark:text-neutral-500 cursor-not-allowed opacity-60 hover:bg-transparent"
+                            }`}
+                            title={
+                              allowDelete ? "Delete" : "No permission to delete"
+                            }
+                            aria-disabled={!allowDelete}
                           >
-                            Save
+                            <FiTrash2 className="w-3.5 h-3.5" aria-hidden />
+                            <span>Delete</span>
                           </motion.button>
-                          <motion.button
-                            whileTap={{ scale: 0.96 }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              cancelEdit();
-                            }}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                          >
-                            Cancel
-                          </motion.button>
-                        </>
-                      )}
-                      <motion.button
-                        whileTap={{ scale: 0.96 }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setConfirmDeleteId(todo.id);
-                        }}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30"
-                        title="Delete"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          className="w-3.5 h-3.5"
-                          aria-hidden="true"
-                        >
-                          <path d="M3 6h18" />
-                          <path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-                          <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
-                          <path d="M10 11v6M14 11v6" />
-                        </svg>
-                        <span>Delete</span>
-                      </motion.button>
-                    </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                   <motion.time
                     layout
@@ -344,8 +357,13 @@ export default function TodoList({
                       onKeyDown={(e) => {
                         if (e.key === "Escape") setConfirmDeleteId(null);
                         if (e.key === "Enter") {
-                          removeTodo(todo.id);
-                          setConfirmDeleteId(null);
+                          if (!allowDelete) {
+                            onBlockedDelete?.();
+                            setConfirmDeleteId(null);
+                          } else {
+                            removeTodo(todo.id);
+                            setConfirmDeleteId(null);
+                          }
                         }
                       }}
                     >
@@ -355,7 +373,11 @@ export default function TodoList({
                       <div className="flex gap-2 justify-end text-xs">
                         <button
                           onClick={() => {
-                            removeTodo(todo.id);
+                            if (!allowDelete) {
+                              onBlockedDelete?.();
+                            } else {
+                              removeTodo(todo.id);
+                            }
                             setConfirmDeleteId(null);
                           }}
                           className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-500"

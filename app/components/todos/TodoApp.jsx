@@ -23,7 +23,7 @@ import SharedTodosList from "../shares/SharedTodosList";
 import DeleteCategoryModal from "../categories/DeleteCategoryModal";
 import LoggedOutHero from "../ui/LoggedOutHero";
 import AddCategoryModal from "../categories/AddCategoryModal";
-import Toast from "../ui/Toast";
+import { toast } from "react-toastify";
 import ConfirmModal from "../ui/ConfirmModal";
 
 export default function TodoApp() {
@@ -235,8 +235,6 @@ export default function TodoApp() {
   const [confirmDeleteCategory, setConfirmDeleteCategory] = useState(null);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [lastDeleted, setLastDeleted] = useState(null);
-  const [toastOpen, setToastOpen] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
   const [pendingRestore, setPendingRestore] = useState(null);
 
   // Shares
@@ -345,11 +343,22 @@ export default function TodoApp() {
         )}&category=${encodeURIComponent(category)}`,
         { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
       );
-      if (!res.ok) throw new Error("Failed to load shared todos");
+      if (!res.ok) {
+        if (res.status === 403) {
+          // No permission to view
+          showToast("You don't have permission to view this category.");
+          // Exit shared view if we just entered it
+          setSharedView(null);
+        } else {
+          showToast("Failed to load shared todos");
+        }
+        return;
+      }
       const data = await res.json();
       setSharedTodos(data || []);
     } catch (e) {
       console.error(e);
+      showToast("Failed to load shared todos");
     } finally {
       setSharedLoading(false);
     }
@@ -387,8 +396,8 @@ export default function TodoApp() {
   const showToast = (msg) => {
     const m = String(msg || "");
     if (!m) return;
-    setToastMessage(m);
-    setToastOpen(true);
+    toast.dismiss();
+    toast(m);
   };
 
   const leaveSharedCategory = hookLeaveSharedCategory
@@ -482,6 +491,25 @@ export default function TodoApp() {
   if (!uid)
     return <LoggedOutHero loading={loading} loginGoogle={loginGoogle} />;
 
+  // Shared delete helper to ensure consistent toasts and optimistic updates
+  const removeSharedTodo = async (id) => {
+    const token = await getToken();
+    // optimistic remove
+    const prev = sharedTodos;
+    setSharedTodos((curr) => (curr || []).filter((t) => t.id !== id));
+    const res = await fetch(`/api/todos?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      if (res.status === 403)
+        showToast("You don't have permission to delete in this category.");
+      else showToast("Delete failed");
+      // revert
+      setSharedTodos(prev);
+    }
+  };
+
   const handleRemoveTodo = async (id) => {
     const idx = todos.findIndex((x) => x.id === id);
     const t = idx >= 0 ? todos[idx] : null;
@@ -489,12 +517,37 @@ export default function TodoApp() {
     if (t) {
       const prevId = idx > 0 ? todos[idx - 1].id : null;
       setLastDeleted({ id: t.id, text: t.text, category: t.category, prevId });
-      setToastOpen(true);
+      // show undo toast for own deletions only
+      toast.dismiss();
+      toast(
+        ({ closeToast }) => (
+          <span className="flex items-center gap-2">
+            Deleted: "{t.text}"
+            <button
+              onClick={async () => {
+                setPendingRestore({
+                  text: t.text,
+                  category: t.category || "general",
+                  prevId: prevId || null,
+                });
+                closeToast?.();
+                setLastDeleted(null);
+                await addTodo(t.text, t.category || "general");
+              }}
+              className="ml-2 rounded px-2 py-0.5 text-xs font-medium bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
+            >
+              Undo
+            </button>
+          </span>
+        ),
+        { autoClose: 5000 }
+      );
     }
   };
 
   const deleteTodoMessage = (() => {
-    const t = todos.find((x) => x.id === confirmDeleteId);
+    const list = sharedView ? sharedTodos : todos;
+    const t = list.find((x) => x.id === confirmDeleteId);
     return t ? `Delete this todo?\n\n${t.text}` : "Delete this todo?";
   })();
 
@@ -532,6 +585,7 @@ export default function TodoApp() {
         categories={categories}
         sharedView={sharedView}
         setSharedView={setSharedView}
+        sharedPerms={sharedPerms}
         shareCategory={shareCategory}
         setShareCategory={setShareCategory}
         shareEmail={shareEmail}
@@ -576,12 +630,26 @@ export default function TodoApp() {
             new Set(sharedTodos.map((t) => t.category || "general"))
           )}
           loading={sharedLoading}
+          allowEdit={Array.isArray(sharedPerms) && sharedPerms.includes("edit")}
+          onBlockedEdit={() =>
+            showToast("You don't have permission to edit in this category.")
+          }
+          allowDelete={
+            Array.isArray(sharedPerms) && sharedPerms.includes("delete")
+          }
+          onBlockedDelete={() =>
+            showToast("You don't have permission to delete in this category.")
+          }
           editingId={editingId}
           editingText={editingText}
           setEditingText={setEditingText}
           editingCategory={editingCategory}
           setEditingCategory={setEditingCategory}
           startEdit={(todo) => {
+            if (!Array.isArray(sharedPerms) || !sharedPerms.includes("edit")) {
+              showToast("You don't have permission to edit in this category.");
+              return;
+            }
             setEditingId(todo.id);
             setEditingText(todo.text);
             setEditingCategory(todo.category || "general");
@@ -590,6 +658,12 @@ export default function TodoApp() {
             if (!editingId) return;
             const text = editingText.trim();
             if (!text) return;
+            if (!Array.isArray(sharedPerms) || !sharedPerms.includes("edit")) {
+              showToast("You don't have permission to edit in this category.");
+              setEditingId(null);
+              setEditingText("");
+              return;
+            }
             try {
               const token = await getToken();
               // optimistic update
@@ -639,8 +713,20 @@ export default function TodoApp() {
             setEditingText("");
           }}
           confirmDeleteId={confirmDeleteId}
-          setConfirmDeleteId={setConfirmDeleteId}
+          setConfirmDeleteId={(id) => {
+            if (Array.isArray(sharedPerms) && !sharedPerms.includes("delete")) {
+              showToast(
+                "You don't have permission to delete in this category."
+              );
+              return;
+            }
+            setConfirmDeleteId(id);
+          }}
           toggleTodo={async (id) => {
+            if (!Array.isArray(sharedPerms) || !sharedPerms.includes("edit")) {
+              showToast("You don't have permission to edit in this category.");
+              return;
+            }
             const t = sharedTodos.find((x) => x.id === id);
             if (!t) return;
             const token = await getToken();
@@ -670,23 +756,7 @@ export default function TodoApp() {
             }
           }}
           removeTodo={async (id) => {
-            const token = await getToken();
-            // optimistic remove
-            const prev = sharedTodos;
-            setSharedTodos((curr) => (curr || []).filter((t) => t.id !== id));
-            const res = await fetch(`/api/todos?id=${encodeURIComponent(id)}`, {
-              method: "DELETE",
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) {
-              if (res.status === 403)
-                showToast(
-                  "You don't have permission to delete in this category."
-                );
-              else showToast("Delete failed");
-              // revert
-              setSharedTodos(prev);
-            }
+            await removeSharedTodo(id);
           }}
           filter={filter}
         />
@@ -695,14 +765,28 @@ export default function TodoApp() {
           sharedView={sharedView}
           sharedTodos={sharedTodos}
           sharedLoading={sharedLoading}
+          onAttemptAction={() =>
+            showToast(
+              "You don't have permission to edit or delete in this category."
+            )
+          }
         />
       )}
 
-      <p className="text-[11px] text-neutral-500 text-center">
-        {sharedView
-          ? "Viewing shared data (read-only)"
-          : "Synced securely to your account (MongoDB)."}
-      </p>
+      {(() => {
+        const text = (() => {
+          if (!sharedView) return "Synced securely to your account (MongoDB).";
+          const perms = Array.isArray(sharedPerms) ? sharedPerms : ["read"];
+          const canEdit = perms.includes("edit") || perms.includes("delete");
+          const canWrite = perms.includes("write");
+          if (canEdit) return "Viewing shared data (editable)";
+          if (canWrite) return "Viewing shared data (can add)";
+          return "Viewing shared data (read-only)";
+        })();
+        return (
+          <p className="text-[11px] text-neutral-500 text-center">{text}</p>
+        );
+      })()}
       <DeleteCategoryModal
         open={!!confirmDeleteCategory}
         category={confirmDeleteCategory || ""}
@@ -725,30 +809,7 @@ export default function TodoApp() {
           setAddCategoryOpen(false);
         }}
       />
-      <Toast
-        open={toastOpen}
-        message={
-          toastMessage || (lastDeleted ? `Deleted: "${lastDeleted.text}"` : "")
-        }
-        actionLabel={lastDeleted ? "Undo" : undefined}
-        onAction={async () => {
-          if (!lastDeleted) return;
-          setPendingRestore({
-            text: lastDeleted.text,
-            category: lastDeleted.category || "general",
-            prevId: lastDeleted.prevId || null,
-          });
-          setToastOpen(false);
-          setLastDeleted(null);
-          setToastMessage("");
-          await addTodo(lastDeleted.text, lastDeleted.category || "general");
-        }}
-        onClose={() => {
-          setToastOpen(false);
-          setLastDeleted(null);
-          setToastMessage("");
-        }}
-      />
+      {/* Toasts handled globally via react-toastify */}
 
       <ConfirmModal
         open={!!confirmClearOpen}
@@ -772,7 +833,11 @@ export default function TodoApp() {
         onCancel={() => setConfirmDeleteId(null)}
         onConfirm={async () => {
           if (!confirmDeleteId) return;
-          await handleRemoveTodo(confirmDeleteId);
+          if (sharedView) {
+            await removeSharedTodo(confirmDeleteId);
+          } else {
+            await handleRemoveTodo(confirmDeleteId);
+          }
           setConfirmDeleteId(null);
         }}
       />

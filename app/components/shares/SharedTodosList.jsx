@@ -1,11 +1,13 @@
 "use client";
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { FiEdit2, FiTrash2 } from "react-icons/fi";
 
 export default function SharedTodosList({
   sharedView,
   sharedTodos,
   sharedLoading,
+  onAttemptAction, // optional: () => void, called when user tries to edit/delete in read-only
 }) {
   if (!sharedView) return null;
   return (
@@ -54,6 +56,7 @@ export default function SharedTodosList({
                 type="checkbox"
                 checked={todo.completed}
                 readOnly
+                onClick={() => onAttemptAction?.()}
                 className="mt-1 size-4 accent-blue-600 opacity-50"
               />
               <div className="flex-1 min-w-0">
@@ -68,6 +71,26 @@ export default function SharedTodosList({
                   </span>
                   {todo.text}
                 </p>
+                <div className="mt-1 flex gap-2 text-xs opacity-60">
+                  <button
+                    onClick={() => onAttemptAction?.()}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 cursor-not-allowed"
+                    title="No permission to edit"
+                    aria-disabled
+                  >
+                    <FiEdit2 className="w-3.5 h-3.5" aria-hidden />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    onClick={() => onAttemptAction?.()}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 cursor-not-allowed"
+                    title="No permission to delete"
+                    aria-disabled
+                  >
+                    <FiTrash2 className="w-3.5 h-3.5" aria-hidden />
+                    <span>Delete</span>
+                  </button>
+                </div>
               </div>
               <time
                 dateTime={new Date(todo.createdAt).toISOString()}
