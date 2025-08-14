@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 function IconCheck({ className = "" }) {
@@ -78,6 +78,19 @@ export default function TodoList({
   filter,
 }) {
   const prefersReducedMotion = useReducedMotion();
+  const [selectedId, setSelectedId] = useState(null);
+  const listRef = useRef(null);
+
+  // Dismiss selection on outside click
+  useEffect(() => {
+    const onDocDown = (e) => {
+      const t = e.target;
+      if (!listRef.current) return;
+      if (!listRef.current.contains(t)) setSelectedId(null);
+    };
+    document.addEventListener("mousedown", onDocDown);
+    return () => document.removeEventListener("mousedown", onDocDown);
+  }, []);
   const listVariants = prefersReducedMotion
     ? {}
     : {
@@ -97,6 +110,7 @@ export default function TodoList({
   const skeletonRows = useMemo(() => Array.from({ length: 4 }), []);
   return (
     <ul
+      ref={listRef}
       className="flex flex-col gap-2 max-h-96 overflow-y-auto scroll-thin pr-1"
       aria-live="polite"
     >
@@ -147,7 +161,8 @@ export default function TodoList({
                 layout
                 variants={itemVariants}
                 key={itemKey}
-                className={`relative group flex items-start gap-3 rounded border border-neutral-300 dark:border-neutral-700 bg-white/70 dark:bg-neutral-900/60 px-3 py-2 shadow-sm ${
+                onClick={() => setSelectedId(todo.id)}
+                className={`relative group flex items-start gap-3 rounded border border-neutral-300 dark:border-neutral-700 bg-white/70 dark:bg-neutral-900/60 px-3 py-2 shadow-sm cursor-pointer ${
                   isNew && !prefersReducedMotion
                     ? "ring-2 ring-violet-300/60"
                     : ""
@@ -196,14 +211,36 @@ export default function TodoList({
                         className="w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white/90 dark:bg-neutral-800 px-2 py-1 text-sm"
                       />
                     )}
-                    <div className="mt-1 flex flex-wrap gap-2 text-xs items-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                    <div
+                      className={`mt-1 flex flex-wrap gap-2 text-xs items-center transition-opacity ${
+                        isEditing || selectedId === todo.id
+                          ? "opacity-100"
+                          : "opacity-0 sm:group-hover:opacity-100"
+                      }`}
+                    >
                       {!isEditing && (
                         <motion.button
-                          whileTap={{ scale: 0.9 }}
-                          onClick={() => startEdit(todo)}
-                          className="text-blue-600 hover:underline"
+                          whileTap={{ scale: 0.96 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEdit(todo);
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                          title="Edit"
                         >
-                          Edit
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            className="w-3.5 h-3.5"
+                            aria-hidden="true"
+                          >
+                            <path d="M12 20h9" />
+                            <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z" />
+                          </svg>
+                          <span>Edit</span>
                         </motion.button>
                       )}
                       {isEditing && (
@@ -220,28 +257,52 @@ export default function TodoList({
                             ))}
                           </select>
                           <motion.button
-                            whileTap={{ scale: 0.9 }}
-                            onClick={saveEdit}
-                            className="text-green-600 hover:underline"
+                            whileTap={{ scale: 0.96 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              saveEdit();
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30 disabled:opacity-60"
                             disabled={!editingText.trim()}
                           >
                             Save
                           </motion.button>
                           <motion.button
-                            whileTap={{ scale: 0.9 }}
-                            onClick={cancelEdit}
-                            className="text-neutral-500 hover:underline"
+                            whileTap={{ scale: 0.96 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              cancelEdit();
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                           >
                             Cancel
                           </motion.button>
                         </>
                       )}
                       <motion.button
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => setConfirmDeleteId(todo.id)}
-                        className="text-red-600 hover:underline"
+                        whileTap={{ scale: 0.96 }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmDeleteId(todo.id);
+                        }}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30"
+                        title="Delete"
                       >
-                        Delete
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          className="w-3.5 h-3.5"
+                          aria-hidden="true"
+                        >
+                          <path d="M3 6h18" />
+                          <path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                          <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+                          <path d="M10 11v6M14 11v6" />
+                        </svg>
+                        <span>Delete</span>
                       </motion.button>
                     </div>
                   </div>

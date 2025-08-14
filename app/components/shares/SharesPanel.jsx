@@ -220,7 +220,7 @@ export default function SharesPanel({
     <div className="rounded border border-neutral-200 dark:border-neutral-800 p-3 flex flex-col gap-2">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
-          Share category (view-only)
+          Share category
         </h3>
         <div className="flex items-center gap-2">
           <button
