@@ -1,5 +1,6 @@
 "use client";
 import React, { useMemo, useState, useEffect } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import ConfirmModal from "../ui/ConfirmModal";
 import SharePermissionsModal from "./SharePermissionsModal";
 import { isValidEmail, formatDateTime } from "../../lib/utils";
@@ -45,6 +46,49 @@ function IconExit({ className = "", ...props }) {
   );
 }
 
+function Avatar({ label = "?", size = 18, className = "" }) {
+  const letter =
+    String(label || "?")
+      .trim()
+      .charAt(0)
+      .toUpperCase() || "?";
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-flex items-center justify-center rounded-full bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-200 font-medium select-none ${className}`}
+      style={{ width: size, height: size, fontSize: Math.max(10, size * 0.55) }}
+    >
+      {letter}
+    </span>
+  );
+}
+
+function SpinnerMini({ className = "" }) {
+  return (
+    <svg
+      className={`animate-spin h-3 w-3 text-violet-600 ${className}`}
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
+      ></circle>
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+      ></path>
+    </svg>
+  );
+}
+
 export default function SharesPanel({
   categories,
   sharedView,
@@ -80,6 +124,7 @@ export default function SharesPanel({
   const [permModalOpen, setPermModalOpen] = useState(false);
   const [selectedPerms, setSelectedPerms] = useState(["read"]);
   const [savingPermId, setSavingPermId] = useState(null); // share id while updating perms
+  const [expandedId, setExpandedId] = useState(null); // mobile: expanded row in "You shared"
 
   useEffect(() => {
     const t = setTimeout(() => setMySharesQueryDeb(mySharesQuery), 200);
@@ -417,12 +462,20 @@ export default function SharesPanel({
               </button>
             </div>
             {shareMsg && (
-              <span className="text-[11px] text-neutral-700 dark:text-neutral-300">
+              <span
+                className="text-[11px] text-neutral-700 dark:text-neutral-300"
+                aria-live="polite"
+              >
                 {shareMsg}
               </span>
             )}
           </div>
 
+          {myShares && myShares.length === 0 && (
+            <div className="text-[11px] text-neutral-500 italic border rounded px-3 py-2">
+              You haven't shared any categories yet.
+            </div>
+          )}
           {!!(myShares && myShares.length) && (
             <div className="text-[11px] text-neutral-600 dark:text-neutral-400">
               <div className="flex items-center justify-between gap-2 mb-1">
@@ -448,6 +501,7 @@ export default function SharesPanel({
                     const sid = typeof s.id === "string" ? s.id.trim() : "";
                     const itemKey =
                       sid || `${s.category}-${s.viewerEmailLower}-${idx}`;
+                    const isExpanded = expandedId === itemKey;
                     const currentPerms =
                       Array.isArray(s.permissions) && s.permissions.length
                         ? s.permissions
@@ -471,69 +525,169 @@ export default function SharesPanel({
                     return (
                       <li
                         key={itemKey}
-                        className="px-2 py-1 rounded border text-xs flex items-center gap-3 justify-between group"
+                        onClick={() =>
+                          setExpandedId((id) =>
+                            id === itemKey ? null : itemKey
+                          )
+                        }
+                        className="px-2 py-1 rounded border text-xs group"
                       >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 capitalize">
-                            {s.category}
-                          </span>
-                          <span className="text-neutral-400 shrink-0">→</span>
-                          <span className="truncate" title={s.viewerEmailLower}>
-                            {s.viewerEmailLower}
-                          </span>
-                          {s.createdAt ? (
-                            <span
-                              className="text-neutral-400 text-[10px] shrink-0"
-                              title={formatDateTime(s.createdAt)}
-                            >
-                              • {formatDateTime(s.createdAt)}
+                        <div className="flex items-center justify-between gap-2 min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 capitalize">
+                              {s.category}
                             </span>
-                          ) : null}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {/* Permission chips */}
-                          <div className="hidden sm:flex items-center gap-1 mr-1">
-                            {["read", "write", "edit", "delete"].map((p) => (
-                              <button
-                                key={p}
-                                type="button"
-                                onClick={() => updatePerms(p)}
-                                disabled={!canToggle}
-                                className={`px-1.5 py-0.5 rounded-full text-[10px] capitalize border ${
-                                  has(p)
-                                    ? "bg-neutral-100 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700"
-                                    : "bg-transparent border-neutral-300 dark:border-neutral-700 text-neutral-400"
-                                } ${
-                                  p === "read"
-                                    ? "cursor-not-allowed opacity-70"
-                                    : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                                }`}
-                                title={
-                                  p === "read"
-                                    ? "Read is always included"
-                                    : has(p)
-                                    ? `Remove ${p}`
-                                    : `Add ${p}`
-                                }
+                            <span className="text-neutral-400 shrink-0">→</span>
+                            <span className="inline-flex items-center gap-1 min-w-0">
+                              <Avatar label={s.viewerEmailLower} />
+                              <span
+                                className="truncate"
+                                title={s.viewerEmailLower}
                               >
-                                {p}
-                              </button>
-                            ))}
+                                {s.viewerEmailLower}
+                              </span>
+                            </span>
+                            {s.createdAt ? (
+                              <span
+                                className="text-neutral-400 text-[10px] shrink-0"
+                                title={formatDateTime(s.createdAt)}
+                              >
+                                • {formatDateTime(s.createdAt)}
+                              </span>
+                            ) : null}
                           </div>
-                          <button
-                            onClick={() =>
-                              setConfirmRevoke({
-                                category: s.category,
-                                email: s.viewerEmailLower,
-                              })
-                            }
-                            aria-label="Revoke access"
-                            title="Revoke access"
-                            className="shrink-0 p-1 rounded text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-                          >
-                            <IconTrash />
-                          </button>
+                          <div className="hidden sm:flex items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-1 mr-1">
+                              {["read", "write", "edit", "delete"].map((p) => (
+                                <button
+                                  key={p}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updatePerms(p);
+                                  }}
+                                  disabled={!canToggle}
+                                  className={`px-1.5 py-0.5 rounded-full text-[10px] capitalize border ${
+                                    has(p)
+                                      ? "bg-neutral-100 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700"
+                                      : "bg-transparent border-neutral-300 dark:border-neutral-700 text-neutral-400"
+                                  } ${
+                                    p === "read"
+                                      ? "cursor-not-allowed opacity-70"
+                                      : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                  }`}
+                                  title={
+                                    p === "read"
+                                      ? "Read is always included"
+                                      : has(p)
+                                      ? `Remove ${p}`
+                                      : `Add ${p}`
+                                  }
+                                >
+                                  {p}
+                                </button>
+                              ))}
+                            </div>
+                            {savingPermId === itemKey && (
+                              <span className="inline-flex items-center gap-1 text-[10px] text-violet-700 dark:text-violet-300">
+                                <SpinnerMini />
+                                Saving…
+                              </span>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setConfirmRevoke({
+                                  category: s.category,
+                                  email: s.viewerEmailLower,
+                                });
+                              }}
+                              aria-label="Revoke access"
+                              title="Revoke access"
+                              disabled={savingPermId === itemKey}
+                              className={`shrink-0 p-1 rounded transition ${
+                                savingPermId === itemKey
+                                  ? "text-neutral-400 cursor-not-allowed"
+                                  : "text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+                              }`}
+                            >
+                              <IconTrash />
+                            </button>
+                          </div>
                         </div>
+
+                        <AnimatePresence initial={false}>
+                          {isExpanded && (
+                            <motion.div
+                              key="mobile-actions"
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.18, ease: "easeOut" }}
+                              className="sm:hidden mt-2 pt-2 border-t border-neutral-200 dark:border-neutral-800"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="flex flex-wrap items-center gap-2 justify-between">
+                                <div className="flex flex-wrap items-center gap-1 mr-1">
+                                  {["read", "write", "edit", "delete"].map(
+                                    (p) => (
+                                      <button
+                                        key={p}
+                                        type="button"
+                                        onClick={() => updatePerms(p)}
+                                        disabled={!canToggle}
+                                        className={`px-1.5 py-0.5 rounded-full text-[10px] capitalize border ${
+                                          has(p)
+                                            ? "bg-neutral-100 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700"
+                                            : "bg-transparent border-neutral-300 dark:border-neutral-700 text-neutral-400"
+                                        } ${
+                                          p === "read"
+                                            ? "cursor-not-allowed opacity-70"
+                                            : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                        }`}
+                                        title={
+                                          p === "read"
+                                            ? "Read is always included"
+                                            : has(p)
+                                            ? `Remove ${p}`
+                                            : `Add ${p}`
+                                        }
+                                      >
+                                        {p}
+                                      </button>
+                                    )
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {savingPermId === itemKey && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] text-violet-700 dark:text-violet-300">
+                                      <SpinnerMini />
+                                      Saving…
+                                    </span>
+                                  )}
+                                  <button
+                                    onClick={() =>
+                                      setConfirmRevoke({
+                                        category: s.category,
+                                        email: s.viewerEmailLower,
+                                      })
+                                    }
+                                    aria-label="Revoke access"
+                                    title="Revoke access"
+                                    disabled={savingPermId === itemKey}
+                                    className={`p-1 rounded ${
+                                      savingPermId === itemKey
+                                        ? "text-neutral-400 cursor-not-allowed"
+                                        : "text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+                                    }`}
+                                  >
+                                    <IconTrash />
+                                  </button>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </li>
                     );
                   })}
@@ -552,6 +706,11 @@ export default function SharesPanel({
             </div>
           )}
 
+          {sharedWithMe && sharedWithMe.length === 0 && (
+            <div className="text-[11px] text-neutral-500 italic border rounded px-3 py-2">
+              Nothing is shared with you yet.
+            </div>
+          )}
           {!!(sharedWithMe && sharedWithMe.length) && (
             <div className="text-[11px] text-neutral-600 dark:text-neutral-400">
               <div className="flex items-center justify-between gap-2 mb-1">
@@ -606,7 +765,14 @@ export default function SharesPanel({
                             key={ownerKey}
                             className="px-2 py-1 rounded border text-xs flex flex-col gap-2"
                           >
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Avatar
+                                label={
+                                  o.ownerName || o.ownerEmail || o.ownerUid
+                                }
+                                size={18}
+                                className="shrink-0"
+                              />
                               <span className="font-medium truncate">
                                 {o.ownerName || o.ownerEmail || o.ownerUid}
                               </span>
