@@ -112,7 +112,6 @@ export default function TodoApp() {
     editTodo,
     stats,
     removeCategory,
-    reorder,
     loading: todosLoading,
   } = useTodos(uid);
 
@@ -121,8 +120,6 @@ export default function TodoApp() {
   const [createCategory, setCreateCategory] = useState("");
   const [addCategoryOpen, setAddCategoryOpen] = useState(false);
   const {
-    baseCategories,
-    customCategories,
     setCustomCategories,
     categories,
     categoriesWithTodos,
@@ -153,15 +150,6 @@ export default function TodoApp() {
       ),
     [dispatch]
   );
-
-  const saveEdit = useCallback(async () => {
-    if (!editingId) return;
-    const text = editingText.trim();
-    if (!text) return;
-
-    await editTodo(editingId, text, editingCategory);
-    dispatch(cancelEditGlobal());
-  }, [editingId, editingText, editingCategory, editTodo, dispatch]);
 
   const [lastDeleted, setLastDeleted] = useState(null);
   const [pendingRestore, setPendingRestore] = useState(null);
