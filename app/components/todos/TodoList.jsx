@@ -52,14 +52,7 @@ export default function TodoList({
   visible,
   categories,
   loading = false,
-  editingId,
-  editingText,
-  setEditingText,
-  editingCategory,
-  setEditingCategory,
-  startEdit,
-  saveEdit,
-  cancelEdit,
+  // editing props are no longer used inline; modal will handle editing
   confirmDeleteId,
   setConfirmDeleteId,
   toggleTodo,
@@ -69,6 +62,7 @@ export default function TodoList({
   onBlockedEdit,
   allowDelete = true,
   onBlockedDelete,
+  onEditClick,
 }) {
   const prefersReducedMotion = useReducedMotion();
   const [selectedId, setSelectedId] = useState(null);
@@ -139,7 +133,7 @@ export default function TodoList({
           exit="exit"
         >
           {visible.map((todo, idx) => {
-            const isEditing = editingId === todo.id;
+            const isEditing = false; // inline editing removed; using modal instead
             // Inline confirm UI removed: use main ConfirmModal only
             const isNew = idx === 0; // recently added appear first per reducer
             const id1 = typeof todo.id === "string" ? todo.id.trim() : "";
@@ -168,28 +162,33 @@ export default function TodoList({
                 onMouseLeave={() => {
                   if (suppressHoverId === todo.id) setSuppressHoverId(null);
                 }}
-                className={`relative group flex items-start gap-3 rounded border border-neutral-300 dark:border-neutral-700 bg-white/70 dark:bg-neutral-900/60 px-3 py-2 shadow-sm cursor-pointer ${
+                className={`relative group flex items-center gap-3 rounded border transition-colors duration-150 border-neutral-300 dark:border-neutral-700 bg-white/70 dark:bg-neutral-900/60 px-3 py-2 shadow-sm cursor-pointer hover:bg-neutral-50/70 dark:hover:bg-neutral-800/60 ${
                   isNew && !prefersReducedMotion
                     ? "ring-2 ring-violet-300/60"
                     : ""
                 }`}
               >
-                <div
-                  className={`flex w-full items-start gap-3 transition filter`}
-                >
-                  <div className="mt-0.5">
+                <div className={`flex w-full items-center gap-3 transition`}>
+                  <div className="shrink-0">
                     <CheckToggle
                       checked={todo.completed}
                       onToggle={() => toggleTodo(todo.id)}
                     />
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div
+                    className={`flex-1 min-w-0 flex items-center gap-3 ${
+                      todo.completed ? "opacity-90" : ""
+                    }`}
+                  >
                     {!isEditing && (
                       <motion.p
                         layout
-                        className={`select-text break-words ${
-                          todo.completed ? "line-through text-neutral-400" : ""
+                        className={`select-text flex-1 min-w-0 truncate ${
+                          todo.completed
+                            ? "line-through text-neutral-400"
+                            : "text-neutral-800 dark:text-neutral-100"
                         }`}
+                        title={todo.text}
                       >
                         <span className="mr-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
                           {(todo.category || "general")
@@ -200,32 +199,19 @@ export default function TodoList({
                         {todo.text}
                       </motion.p>
                     )}
-                    {isEditing && (
-                      <motion.input
-                        layout
-                        autoFocus
-                        value={editingText}
-                        onChange={(e) => setEditingText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") saveEdit();
-                          if (e.key === "Escape") cancelEdit();
-                        }}
-                        className="w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white/90 dark:bg-neutral-800 px-2 py-1 text-sm"
-                      />
-                    )}
+                    {/* editing handled by modal */}
                     {(() => {
                       const actionsVisibilityClass =
                         isEditing || selectedId === todo.id
                           ? "opacity-100"
                           : suppressHoverId === todo.id
-                          ? // keep hidden on desktop (no hover reveal) until mouse leaves
-                            "opacity-100 sm:opacity-0"
+                          ? "opacity-100 sm:opacity-0"
                           : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100";
                       return (
                         <div
-                          className={`mt-1 flex flex-wrap gap-2 text-xs items-center transition-opacity ${actionsVisibilityClass}`}
+                          className={`ml-auto flex items-center gap-2 text-xs transition-opacity ${actionsVisibilityClass}`}
                         >
-                          {!isEditing && (
+                          {
                             <motion.button
                               whileTap={{ scale: 0.96 }}
                               onClick={(e) => {
@@ -234,7 +220,9 @@ export default function TodoList({
                                   onBlockedEdit?.();
                                   return;
                                 }
-                                startEdit(todo);
+                                if (onEditClick) onEditClick(todo);
+                                else if (typeof startEdit === "function")
+                                  startEdit(todo);
                               }}
                               className={`inline-flex items-center gap-1 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 ${
                                 allowEdit
@@ -247,47 +235,9 @@ export default function TodoList({
                               aria-disabled={!allowEdit}
                             >
                               <FiEdit2 className="w-3.5 h-3.5" aria-hidden />
-                              <span>Edit</span>
+                              <span className="hidden md:inline">Edit</span>
                             </motion.button>
-                          )}
-                          {isEditing && (
-                            <>
-                              <select
-                                value={editingCategory}
-                                onChange={(e) =>
-                                  setEditingCategory(e.target.value)
-                                }
-                                className="rounded border border-neutral-300 dark:border-neutral-600 bg-white/80 dark:bg-neutral-800 px-2 py-1 text-[11px]"
-                              >
-                                {categories.map((c) => (
-                                  <option key={c} value={c}>
-                                    {c.charAt(0).toUpperCase() + c.slice(1)}
-                                  </option>
-                                ))}
-                              </select>
-                              <motion.button
-                                whileTap={{ scale: 0.96 }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  saveEdit();
-                                }}
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30 disabled:opacity-60"
-                                disabled={!editingText.trim()}
-                              >
-                                Save
-                              </motion.button>
-                              <motion.button
-                                whileTap={{ scale: 0.96 }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  cancelEdit();
-                                }}
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                              >
-                                Cancel
-                              </motion.button>
-                            </>
-                          )}
+                          }
                           <motion.button
                             whileTap={{ scale: 0.96 }}
                             onClick={(e) => {
@@ -309,7 +259,7 @@ export default function TodoList({
                             aria-disabled={!allowDelete}
                           >
                             <FiTrash2 className="w-3.5 h-3.5" aria-hidden />
-                            <span>Delete</span>
+                            <span className="hidden md:inline">Delete</span>
                           </motion.button>
                         </div>
                       );
@@ -318,7 +268,7 @@ export default function TodoList({
                   <motion.time
                     layout
                     dateTime={new Date(todo.createdAt).toISOString()}
-                    className="text-[10px] shrink-0 self-center text-neutral-400"
+                    className="text-[10px] shrink-0 self-center text-neutral-400 hidden sm:inline"
                     title={new Date(todo.createdAt).toLocaleString()}
                   >
                     {new Date(todo.createdAt).toLocaleTimeString([], {

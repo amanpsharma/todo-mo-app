@@ -27,6 +27,7 @@ import DeleteCategoryModal from "../categories/DeleteCategoryModal";
 import LoggedOutHero from "../ui/LoggedOutHero";
 import AddCategoryModal from "../categories/AddCategoryModal";
 import ConfirmModal from "../ui/ConfirmModal";
+import EditTodoModal from "./EditTodoModal";
 import { useDispatch, useSelector } from "react-redux";
 import useCategoryState from "../../hooks/useCategoryState";
 import useSharedView from "../../hooks/useSharedView";
@@ -583,14 +584,7 @@ export default function TodoApp() {
           visible={visible}
           categories={categories}
           loading={todosLoading}
-          editingId={editingId}
-          editingText={editingText}
-          setEditingText={setEditingText}
-          editingCategory={editingCategory}
-          setEditingCategory={setEditingCategory}
-          startEdit={startEdit}
-          saveEdit={saveEdit}
-          cancelEdit={cancelEdit}
+          onEditClick={(todo) => startEdit(todo)}
           confirmDeleteId={confirmDeleteId}
           setConfirmDeleteId={setConfirmDeleteId}
           toggleTodo={toggleTodo}
@@ -612,12 +606,7 @@ export default function TodoApp() {
           onBlockedDelete={() =>
             showToast("You don't have permission to delete in this category.")
           }
-          editingId={editingId}
-          editingText={editingText}
-          setEditingText={setEditingText}
-          editingCategory={editingCategory}
-          setEditingCategory={setEditingCategory}
-          startEdit={(todo) => {
+          onEditClick={(todo) => {
             if (!requireEdit()) return;
             dispatch(
               startEditGlobal({
@@ -627,58 +616,6 @@ export default function TodoApp() {
               })
             );
           }}
-          saveEdit={async () => {
-            if (!editingId) return;
-            const text = editingText.trim();
-            if (!text) return;
-            if (!requireEdit()) {
-              dispatch(cancelEditGlobal());
-              return;
-            }
-            try {
-              const token = await getToken();
-              // optimistic update
-              const prev = sharedTodos;
-              const nextCategory = editingCategory || "general";
-              const isSameCategory =
-                (sharedView?.category || "general") === nextCategory;
-              setSharedTodos((curr) => {
-                const list = Array.isArray(curr) ? curr.slice() : [];
-                if (isSameCategory) {
-                  return list.map((t) =>
-                    t.id === editingId
-                      ? { ...t, text, category: nextCategory }
-                      : t
-                  );
-                }
-                // moved out of the viewed category, remove it from list
-                return list.filter((t) => t.id !== editingId);
-              });
-              const body = { id: editingId, text };
-              if (editingCategory) body.category = editingCategory;
-              const res = await fetch(`/api/todos`, {
-                method: "PATCH",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify(body),
-              });
-              if (!res.ok) {
-                if (res.status === 403)
-                  showToast(
-                    "You don't have permission to edit in this category."
-                  );
-                else showToast("Edit failed");
-                // revert optimistic change
-                setSharedTodos(prev);
-                return;
-              }
-            } finally {
-              dispatch(cancelEditGlobal());
-            }
-          }}
-          cancelEdit={cancelEdit}
           confirmDeleteId={confirmDeleteId}
           setConfirmDeleteId={(id) => {
             if (!requireDelete()) return;
@@ -789,6 +726,75 @@ export default function TodoApp() {
             await handleRemoveTodo(confirmDeleteId);
           }
           setConfirmDeleteId(null);
+        }}
+      />
+
+      {/* Edit modal (re-uses Redux editing state) */}
+      <EditTodoModal
+        open={!!editingId}
+        text={editingText || ""}
+        category={editingCategory || "general"}
+        categories={
+          sharedView ? [sharedView.category || "general"] : categories
+        }
+        setText={setEditingText}
+        setCategory={(v) => {
+          if (!sharedView) setEditingCategory(v);
+          else setEditingCategory(sharedView.category || "general");
+        }}
+        onCancel={() => dispatch(cancelEditGlobal())}
+        onConfirm={async () => {
+          if (!editingId) return;
+          const text = (editingText || "").trim();
+          if (!text) return;
+          if (sharedView) {
+            if (!requireEdit()) {
+              dispatch(cancelEditGlobal());
+              return;
+            }
+            try {
+              const token = await getToken();
+              const prev = sharedTodos;
+              const nextCategory = editingCategory || "general";
+              const isSameCategory =
+                (sharedView?.category || "general") === nextCategory;
+              setSharedTodos((curr) => {
+                const list = Array.isArray(curr) ? curr.slice() : [];
+                if (isSameCategory) {
+                  return list.map((t) =>
+                    t.id === editingId
+                      ? { ...t, text, category: nextCategory }
+                      : t
+                  );
+                }
+                return list.filter((t) => t.id !== editingId);
+              });
+              const body = { id: editingId, text };
+              if (editingCategory) body.category = editingCategory;
+              const res = await fetch(`/api/todos`, {
+                method: "PATCH",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(body),
+              });
+              if (!res.ok) {
+                if (res.status === 403)
+                  showToast(
+                    "You don't have permission to edit in this category."
+                  );
+                else showToast("Edit failed");
+                setSharedTodos(prev);
+                return;
+              }
+            } finally {
+              dispatch(cancelEditGlobal());
+            }
+          } else {
+            await editTodo(editingId, text, editingCategory || "general");
+            dispatch(cancelEditGlobal());
+          }
         }}
       />
 
