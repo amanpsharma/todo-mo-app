@@ -2,32 +2,70 @@
 import Image from "next/image";
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
+import { useMemo } from "react";
+
+// Extract features data to make component more maintainable
+const FEATURES = [
+  { icon: "/window.svg", label: "Clean, accessible UI" },
+  { icon: "/file.svg", label: "Categories + filters" },
+  { icon: "/globe.svg", label: "Share, view-only" },
+  { icon: "/next.svg", label: "Next.js 15 (App Router)" },
+  { icon: "/vercel.svg", label: "Fast deploy on Vercel" },
+  { icon: "/globe.svg", label: "React 19 + Framer Motion 11" },
+];
+
+// Feature item component to reduce repetition
+const FeatureItem = ({ icon, label, variants, prefersReducedMotion }) => (
+  <motion.div
+    className="flex items-center gap-2 rounded-lg border border-neutral-200 dark:border-neutral-800 px-3 py-2 bg-white/60 dark:bg-neutral-900/60 hover:border-neutral-300 dark:hover:border-neutral-700 transition-colors"
+    whileHover={prefersReducedMotion ? undefined : { scale: 1.02 }}
+    variants={variants}
+    transition={{ type: "spring", stiffness: 250, damping: 20 }}
+  >
+    <Image src={icon} alt="" width={18} height={18} aria-hidden />
+    <span className="text-xs sm:text-[13px] text-neutral-700 dark:text-neutral-300">
+      {label}
+    </span>
+  </motion.div>
+);
 
 export default function LoggedOutHero({ loading, loginGoogle }) {
   const prefersReducedMotion = useReducedMotion();
-  // Variants for staggered feature reveal
-  const featureContainer = prefersReducedMotion
-    ? undefined
-    : {
-        hidden: {},
-        show: {
-          transition: { staggerChildren: 0.06, delayChildren: 0.1 },
+
+  // Memoize animation variants to prevent unnecessary recalculations
+  const { featureContainer, featureItem, initialHeroAnimation } =
+    useMemo(() => {
+      if (prefersReducedMotion) {
+        return {
+          featureContainer: undefined,
+          featureItem: undefined,
+          initialHeroAnimation: false,
+        };
+      }
+
+      return {
+        featureContainer: {
+          hidden: {},
+          show: {
+            transition: { staggerChildren: 0.06, delayChildren: 0.1 },
+          },
         },
-      };
-  const featureItem = prefersReducedMotion
-    ? undefined
-    : {
-        hidden: { opacity: 0, y: 8 },
-        show: {
-          opacity: 1,
-          y: 0,
-          transition: { duration: 0.35, ease: "easeOut" },
+        featureItem: {
+          hidden: { opacity: 0, y: 8 },
+          show: {
+            opacity: 1,
+            y: 0,
+            transition: { duration: 0.35, ease: "easeOut" },
+          },
         },
+        initialHeroAnimation: { opacity: 0, y: 8 },
       };
+    }, [prefersReducedMotion]);
+
   return (
     <motion.div
       className="w-full max-w-4xl mx-auto px-2"
-      initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+      initial={initialHeroAnimation}
       animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.2 }}
       transition={
@@ -41,7 +79,7 @@ export default function LoggedOutHero({ loading, loginGoogle }) {
         aria-labelledby="hero-title"
         aria-describedby="hero-desc"
       >
-        {/* Decorative background: grid + soft gradients (respects reduced motion) */}
+        {/* Decorative background */}
         <div className="absolute inset-0 -z-10 opacity-50 pointer-events-none select-none">
           <div className="absolute inset-0 [mask-image:radial-gradient(ellipse_at_center,black,transparent_70%)]">
             <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(0,0,0,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.06)_1px,transparent_1px)] bg-[size:24px_24px] dark:bg-[linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.06)_1px,transparent_1px)]" />
@@ -70,6 +108,8 @@ export default function LoggedOutHero({ loading, loginGoogle }) {
             }
           />
         </div>
+
+        {/* Main content */}
         <div className="text-center">
           <h1
             id="hero-title"
@@ -82,14 +122,14 @@ export default function LoggedOutHero({ loading, loginGoogle }) {
           </h1>
           <p
             id="hero-desc"
-            className="mt-3 text-sm sm:text-base text-neutral-600 dark:text-neutral-400"
+            className="mt-3 text-sm sm:text-base text-neutral-600 dark:text-neutral-400 max-w-2xl mx-auto"
           >
             Fast, simple, and shareable todo lists with categories, animated
             modals, and read-only sharing. Powered by Next.js 15 and React 19.
             Secure with Firebase Auth and MongoDB.
           </p>
           <div
-            className="mt-3 flex items-center justify-center gap-2"
+            className="mt-3 flex flex-wrap items-center justify-center gap-2"
             aria-hidden
           >
             <span className="inline-flex items-center gap-1 rounded-full border border-neutral-300 dark:border-neutral-700 bg-white/70 dark:bg-neutral-900/60 px-2.5 py-1 text-[11px] text-neutral-600 dark:text-neutral-400">
@@ -103,12 +143,13 @@ export default function LoggedOutHero({ loading, loginGoogle }) {
           </div>
         </div>
 
+        {/* Call to action */}
         <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
           <motion.button
             onClick={loginGoogle}
             disabled={loading}
             aria-busy={loading || undefined}
-            className="relative overflow-hidden inline-flex items-center gap-2 px-4 py-2 rounded-md bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-sm font-medium hover:from-violet-500 hover:to-fuchsia-500 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60"
+            className="relative overflow-hidden inline-flex items-center gap-2 px-4 py-2 rounded-md bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-sm font-medium hover:from-violet-500 hover:to-fuchsia-500 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60 transition-all"
             whileHover={prefersReducedMotion ? undefined : { scale: 1.03 }}
             whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
           >
@@ -121,7 +162,6 @@ export default function LoggedOutHero({ loading, loginGoogle }) {
                 className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/3 bg-white/20 blur-md skew-x-12"
               />
             )}
-            {/* Inline Google mark for better recognition */}
             <svg
               aria-hidden
               width="16"
@@ -146,7 +186,7 @@ export default function LoggedOutHero({ loading, loginGoogle }) {
                 d="M43.6 20.5H42V20H24v8h11.3c-1.3 3.8-5 6-11.3 6-5.3 0-9.8-3.4-11.4-8.1l-6.5 5C9.5 39.7 16.2 44 24 44c10.4 0 19-7.5 19-20 0-1.1-.1-2.1-.4-3.5z"
               />
             </svg>
-            <span aria-live="polite">
+            <span aria-live="polite" className="relative">
               {loading ? "Loading…" : "Continue with Google"}
             </span>
           </motion.button>
@@ -157,13 +197,14 @@ export default function LoggedOutHero({ loading, loginGoogle }) {
           >
             <Link
               href="#features"
-              className="text-sm px-4 py-2 rounded-md border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-500/50"
+              className="text-sm px-4 py-2 rounded-md border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-500/50 transition-colors"
             >
               Explore features
             </Link>
           </motion.div>
         </div>
 
+        {/* Features grid */}
         <motion.div
           className="mt-8 grid grid-cols-2 sm:grid-cols-3 gap-3"
           id="features"
@@ -172,29 +213,18 @@ export default function LoggedOutHero({ loading, loginGoogle }) {
           whileInView={prefersReducedMotion ? undefined : "show"}
           viewport={{ once: true, amount: 0.3 }}
         >
-          {[
-            { icon: "/window.svg", label: "Clean, accessible UI" },
-            { icon: "/file.svg", label: "Categories + filters" },
-            { icon: "/globe.svg", label: "Share, view-only" },
-            { icon: "/next.svg", label: "Next.js 15 (App Router)" },
-            { icon: "/vercel.svg", label: "Fast deploy on Vercel" },
-            { icon: "/globe.svg", label: "React 19 + Framer Motion 11" },
-          ].map((f) => (
-            <motion.div
-              key={f.label}
-              className="flex items-center gap-2 rounded-lg border border-neutral-200 dark:border-neutral-800 px-3 py-2 bg-white/60 dark:bg-neutral-900/60 hover:border-neutral-300 dark:hover:border-neutral-700"
-              whileHover={prefersReducedMotion ? undefined : { scale: 1.02 }}
+          {FEATURES.map((feature) => (
+            <FeatureItem
+              key={feature.label}
+              icon={feature.icon}
+              label={feature.label}
               variants={featureItem}
-              transition={{ type: "spring", stiffness: 250, damping: 20 }}
-            >
-              <Image src={f.icon} alt="" width={18} height={18} aria-hidden />
-              <span className="text-xs sm:text-[13px] text-neutral-700 dark:text-neutral-300">
-                {f.label}
-              </span>
-            </motion.div>
+              prefersReducedMotion={prefersReducedMotion}
+            />
           ))}
         </motion.div>
 
+        {/* Preview section */}
         <div className="mt-8">
           <motion.div
             className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-gradient-to-br from-neutral-50/90 to-white/70 dark:from-neutral-900/60 dark:to-neutral-950/40 p-4 sm:p-6 shadow-inner"
@@ -226,6 +256,7 @@ export default function LoggedOutHero({ loading, loginGoogle }) {
                   checked
                   readOnly
                   className="size-4 accent-blue-600"
+                  aria-label="Welcome to your Todo app (completed)"
                 />
                 <span className="line-through text-neutral-400">
                   Welcome to your Todo app
@@ -236,6 +267,7 @@ export default function LoggedOutHero({ loading, loginGoogle }) {
                   type="checkbox"
                   readOnly
                   className="size-4 accent-blue-600"
+                  aria-label="Add tasks and organize by category (not completed)"
                 />
                 <span>
                   Add tasks and{" "}
@@ -247,6 +279,7 @@ export default function LoggedOutHero({ loading, loginGoogle }) {
                   type="checkbox"
                   readOnly
                   className="size-4 accent-blue-600"
+                  aria-label="Share a category as view-only (not completed)"
                 />
                 <span>
                   <span className="font-medium">Share</span> a category as
