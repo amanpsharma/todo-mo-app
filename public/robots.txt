@@ -1,0 +1,4 @@
+# Favicon cache-busting hint (optional for CDNs)
+# If using a CDN or aggressive caching, bump the version in layout.js icons when favicon changes.
+User-agent: *
+Allow: /

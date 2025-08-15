@@ -556,11 +556,20 @@ export default function TodoApp() {
       <AddTodoForm
         input={input}
         setInput={setInput}
-        newCategory={newCategory}
-        setNewCategory={setNewCategory}
-        categories={categories}
+        newCategory={
+          sharedView ? sharedView.category || "general" : newCategory
+        }
+        setNewCategory={(val) => {
+          if (sharedView) return; // locked in shared view
+          setNewCategory(val);
+        }}
+        categories={
+          sharedView ? [sharedView.category || "general"] : categories
+        }
         onSubmit={submit}
         onOpenAddCategoryModal={() => setAddCategoryOpen(true)}
+        categoryDisabled={!!sharedView}
+        addCategoryDisabled={!!sharedView}
       />
 
       <FiltersBar

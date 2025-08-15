@@ -8,7 +8,7 @@ export default function Toast({
   actionLabel,
   onAction,
   onClose,
-  duration = 7000,
+  duration = 4000,
 }) {
   useEffect(() => {
     if (!open) return;

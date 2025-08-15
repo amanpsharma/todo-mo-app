@@ -9,6 +9,8 @@ export default function AddTodoForm({
   categories,
   onSubmit,
   onOpenAddCategoryModal,
+  categoryDisabled = false,
+  addCategoryDisabled = false,
 }) {
   return (
     <form onSubmit={onSubmit} className="flex gap-2 flex-wrap">
@@ -22,6 +24,7 @@ export default function AddTodoForm({
       <select
         value={newCategory}
         onChange={(e) => setNewCategory(e.target.value)}
+        disabled={categoryDisabled}
         className="rounded border border-neutral-300 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/60 px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500 text-neutral-900 dark:text-neutral-100"
       >
         {categories.map((c) => (
@@ -33,8 +36,13 @@ export default function AddTodoForm({
       <button
         type="button"
         onClick={onOpenAddCategoryModal}
+        disabled={addCategoryDisabled}
         className="rounded bg-violet-600 hover:bg-violet-500 text-white px-3 text-sm"
-        title="Add a new category"
+        title={
+          addCategoryDisabled
+            ? "Cannot add category in shared view"
+            : "Add a new category"
+        }
       >
         Add category
       </button>
