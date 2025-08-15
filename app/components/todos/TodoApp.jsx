@@ -10,6 +10,14 @@ import {
   sanitizeCategoryName,
   isValidEmail,
   getAuthToken,
+  DEFAULT_CATEGORIES,
+  hasEditPermission,
+  hasDeletePermission,
+  hasWritePermission,
+  getFooterText,
+  getDeleteTodoMessage,
+  showToast,
+  showUndoDeleteToast,
 } from "../../lib/utils";
 import AddTodoForm from "./AddTodoForm";
 import CategoryChips from "../categories/CategoryChips";
@@ -25,6 +33,20 @@ import LoggedOutHero from "../ui/LoggedOutHero";
 import AddCategoryModal from "../categories/AddCategoryModal";
 import { toast } from "react-toastify";
 import ConfirmModal from "../ui/ConfirmModal";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  setFilter as setFilterGlobal,
+  setCategoryFilter as setCategoryFilterGlobal,
+  startEdit as startEditGlobal,
+  setEditingText as setEditingTextGlobal,
+  setEditingCategory as setEditingCategoryGlobal,
+  cancelEdit as cancelEditGlobal,
+  openConfirmDelete,
+  closeConfirmDelete,
+  openConfirmClear,
+  closeConfirmClear,
+  setConfirmDeleteCategory as setConfirmDeleteCategoryGlobal,
+} from "../../store/uiSlice";
 
 export default function TodoApp() {
   const { user, loading, loginGoogle } = useAuth();
@@ -52,10 +74,7 @@ export default function TodoApp() {
   const [input, setInput] = useState("");
   const [createCategory, setCreateCategory] = useState("");
   const [addCategoryOpen, setAddCategoryOpen] = useState(false);
-  const baseCategories = useMemo(
-    () => ["general", "work", "personal", "shopping", "urgent"],
-    []
-  );
+  const baseCategories = useMemo(() => DEFAULT_CATEGORIES, []);
   const [customCategories, setCustomCategories] = useState([]);
   // Persist custom categories
   useEffect(() => {
@@ -116,6 +135,7 @@ export default function TodoApp() {
       setNewCategory(categories[0]);
     }
   }, [categories, newCategory]);
+  // (moved below after categoryFilter is initialized)
 
   const categoriesWithTodos = useMemo(() => {
     const set = new Set(
@@ -142,7 +162,7 @@ export default function TodoApp() {
     // Shared view: add to owner's list if allowed, else toast
     if (sharedView) {
       const cat = sharedView.category || "general";
-      if (!Array.isArray(sharedPerms) || !sharedPerms.includes("write")) {
+      if (!hasWritePermission(sharedPerms)) {
         showToast("You don't have permission to add in this category.");
         return;
       }
@@ -192,14 +212,18 @@ export default function TodoApp() {
       }
       return;
     }
-    // Own list
+    // Own list via useTodos (optimistic + refresh)
     await addTodo(text, newCategory || "general");
     setInput("");
   };
 
-  // Filters
-  const [filter, setFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  // Filters (Redux)
+  const dispatch = useDispatch();
+  const filter = useSelector((s) => s.ui.filter);
+  const categoryFilter = useSelector((s) => s.ui.categoryFilter);
+  const setFilter = (val) => dispatch(setFilterGlobal(val));
+  const setCategoryFilter = (val) => dispatch(setCategoryFilterGlobal(val));
+  // Keep the Add form's category in sync with the current category filter (own list only)
   const visible = useMemo(() => {
     let list = todos;
     if (categoryFilter !== "all") {
@@ -208,32 +232,43 @@ export default function TodoApp() {
     return list.filter(FILTERS[filter]);
   }, [todos, filter, categoryFilter]);
 
-  // Edit state
-  const [editingId, setEditingId] = useState(null);
-  const [editingText, setEditingText] = useState("");
-  const [editingCategory, setEditingCategory] = useState("general");
-  const startEdit = (todo) => {
-    setEditingId(todo.id);
-    setEditingText(todo.text);
-    setEditingCategory(todo.category || "general");
-  };
+  // Edit state (Redux)
+  const editingId = useSelector((s) => s.ui.editingId);
+  const editingText = useSelector((s) => s.ui.editingText);
+  const editingCategory = useSelector((s) => s.ui.editingCategory);
+  const setEditingText = (val) => dispatch(setEditingTextGlobal(val));
+  const setEditingCategory = (val) => dispatch(setEditingCategoryGlobal(val));
+  const startEdit = (todo) =>
+    dispatch(
+      startEditGlobal({
+        id: todo.id,
+        text: todo.text,
+        category: todo.category || "general",
+      })
+    );
   const saveEdit = async () => {
     if (!editingId) return;
     const text = editingText.trim();
     if (!text) return;
     await editTodo(editingId, text, editingCategory);
-    setEditingId(null);
-    setEditingText("");
+    dispatch(cancelEditGlobal());
   };
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditingText("");
-  };
+  const cancelEdit = () => dispatch(cancelEditGlobal());
 
-  // Confirms and toast
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const [confirmDeleteCategory, setConfirmDeleteCategory] = useState(null);
-  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+  // Confirms and toast (Redux)
+  const confirmDeleteId = useSelector((s) => s.ui.confirmDeleteId);
+  const confirmDeleteCategory = useSelector((s) => s.ui.confirmDeleteCategory);
+  const confirmClearOpen = useSelector((s) => s.ui.confirmClearOpen);
+  const setConfirmDeleteId = (id) => {
+    if (id) dispatch(openConfirmDelete(id));
+    else dispatch(closeConfirmDelete());
+  };
+  const setConfirmDeleteCategory = (val) =>
+    dispatch(setConfirmDeleteCategoryGlobal(val));
+  const setConfirmClearOpen = (open) => {
+    if (open) dispatch(openConfirmClear());
+    else dispatch(closeConfirmClear());
+  };
   const [lastDeleted, setLastDeleted] = useState(null);
   const [pendingRestore, setPendingRestore] = useState(null);
 
@@ -332,6 +367,14 @@ export default function TodoApp() {
   const urlInitializedRef = useRef(false);
   const getToken = getAuthToken;
 
+  // Keep the Add form's category in sync with the current category filter (own list only)
+  useEffect(() => {
+    if (sharedView) return;
+    if (categoryFilter && categoryFilter !== "all") {
+      setNewCategory(categoryFilter);
+    }
+  }, [categoryFilter, sharedView]);
+
   const loadSharedTodos = async (ownerUid, category, ownerDisplay) => {
     try {
       setSharedLoading(true);
@@ -393,12 +436,7 @@ export default function TodoApp() {
     run();
   }, [sharedView, uid, getToken]);
 
-  const showToast = (msg) => {
-    const m = String(msg || "");
-    if (!m) return;
-    toast.dismiss();
-    toast(m);
-  };
+  // showToast now imported from utils
 
   const leaveSharedCategory = hookLeaveSharedCategory
     ? hookLeaveSharedCategory
@@ -518,38 +556,22 @@ export default function TodoApp() {
       const prevId = idx > 0 ? todos[idx - 1].id : null;
       setLastDeleted({ id: t.id, text: t.text, category: t.category, prevId });
       // show undo toast for own deletions only
-      toast.dismiss();
-      toast(
-        ({ closeToast }) => (
-          <span className="flex items-center gap-2">
-            Deleted: "{t.text}"
-            <button
-              onClick={async () => {
-                setPendingRestore({
-                  text: t.text,
-                  category: t.category || "general",
-                  prevId: prevId || null,
-                });
-                closeToast?.();
-                setLastDeleted(null);
-                await addTodo(t.text, t.category || "general");
-              }}
-              className="ml-2 rounded px-2 py-0.5 text-xs font-medium bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
-            >
-              Undo
-            </button>
-          </span>
-        ),
-        { autoClose: 5000 }
-      );
+      showUndoDeleteToast(`Deleted: "${t.text}"`, async () => {
+        setPendingRestore({
+          text: t.text,
+          category: t.category || "general",
+          prevId: prevId || null,
+        });
+        setLastDeleted(null);
+        await addTodo(t.text, t.category || "general");
+      });
     }
   };
 
-  const deleteTodoMessage = (() => {
-    const list = sharedView ? sharedTodos : todos;
-    const t = list.find((x) => x.id === confirmDeleteId);
-    return t ? `Delete this todo?\n\n${t.text}` : "Delete this todo?";
-  })();
+  const deleteTodoMessage = getDeleteTodoMessage(
+    sharedView ? sharedTodos : todos,
+    confirmDeleteId
+  );
 
   return (
     <div className="w-full max-w-xl mx-auto flex flex-col gap-6">
@@ -632,20 +654,18 @@ export default function TodoApp() {
           filter={filter}
         />
       ) : Array.isArray(sharedPerms) &&
-        (sharedPerms.includes("edit") || sharedPerms.includes("delete")) ? (
+        (hasEditPermission(sharedPerms) || hasDeletePermission(sharedPerms)) ? (
         <TodoList
           visible={sharedTodos}
           categories={Array.from(
             new Set(sharedTodos.map((t) => t.category || "general"))
           )}
           loading={sharedLoading}
-          allowEdit={Array.isArray(sharedPerms) && sharedPerms.includes("edit")}
+          allowEdit={hasEditPermission(sharedPerms)}
           onBlockedEdit={() =>
             showToast("You don't have permission to edit in this category.")
           }
-          allowDelete={
-            Array.isArray(sharedPerms) && sharedPerms.includes("delete")
-          }
+          allowDelete={hasDeletePermission(sharedPerms)}
           onBlockedDelete={() =>
             showToast("You don't have permission to delete in this category.")
           }
@@ -655,22 +675,25 @@ export default function TodoApp() {
           editingCategory={editingCategory}
           setEditingCategory={setEditingCategory}
           startEdit={(todo) => {
-            if (!Array.isArray(sharedPerms) || !sharedPerms.includes("edit")) {
+            if (!hasEditPermission(sharedPerms)) {
               showToast("You don't have permission to edit in this category.");
               return;
             }
-            setEditingId(todo.id);
-            setEditingText(todo.text);
-            setEditingCategory(todo.category || "general");
+            dispatch(
+              startEditGlobal({
+                id: todo.id,
+                text: todo.text,
+                category: todo.category || "general",
+              })
+            );
           }}
           saveEdit={async () => {
             if (!editingId) return;
             const text = editingText.trim();
             if (!text) return;
-            if (!Array.isArray(sharedPerms) || !sharedPerms.includes("edit")) {
+            if (!hasEditPermission(sharedPerms)) {
               showToast("You don't have permission to edit in this category.");
-              setEditingId(null);
-              setEditingText("");
+              dispatch(cancelEditGlobal());
               return;
             }
             try {
@@ -713,17 +736,15 @@ export default function TodoApp() {
                 return;
               }
             } finally {
-              setEditingId(null);
-              setEditingText("");
+              dispatch(cancelEditGlobal());
             }
           }}
           cancelEdit={() => {
-            setEditingId(null);
-            setEditingText("");
+            dispatch(cancelEditGlobal());
           }}
           confirmDeleteId={confirmDeleteId}
           setConfirmDeleteId={(id) => {
-            if (Array.isArray(sharedPerms) && !sharedPerms.includes("delete")) {
+            if (!hasDeletePermission(sharedPerms)) {
               showToast(
                 "You don't have permission to delete in this category."
               );
@@ -732,7 +753,7 @@ export default function TodoApp() {
             setConfirmDeleteId(id);
           }}
           toggleTodo={async (id) => {
-            if (!Array.isArray(sharedPerms) || !sharedPerms.includes("edit")) {
+            if (!hasEditPermission(sharedPerms)) {
               showToast("You don't have permission to edit in this category.");
               return;
             }
@@ -783,15 +804,10 @@ export default function TodoApp() {
       )}
 
       {(() => {
-        const text = (() => {
-          if (!sharedView) return "Synced securely to your account (MongoDB).";
-          const perms = Array.isArray(sharedPerms) ? sharedPerms : ["read"];
-          const canEdit = perms.includes("edit") || perms.includes("delete");
-          const canWrite = perms.includes("write");
-          if (canEdit) return "Viewing shared data (editable)";
-          if (canWrite) return "Viewing shared data (can add)";
-          return "Viewing shared data (read-only)";
-        })();
+        const text = getFooterText(
+          sharedView,
+          Array.isArray(sharedPerms) ? sharedPerms : ["read"]
+        );
         return (
           <p className="text-[11px] text-neutral-500 text-center">{text}</p>
         );

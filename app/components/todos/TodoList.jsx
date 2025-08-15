@@ -140,7 +140,7 @@ export default function TodoList({
         >
           {visible.map((todo, idx) => {
             const isEditing = editingId === todo.id;
-            const isConfirmingDelete = confirmDeleteId === todo.id;
+            // Inline confirm UI removed: use main ConfirmModal only
             const isNew = idx === 0; // recently added appear first per reducer
             const id1 = typeof todo.id === "string" ? todo.id.trim() : "";
             const id2 = typeof todo._id === "string" ? todo._id.trim() : "";
@@ -175,11 +175,7 @@ export default function TodoList({
                 }`}
               >
                 <div
-                  className={`flex w-full items-start gap-3 transition filter ${
-                    isConfirmingDelete
-                      ? "opacity-40 blur-[2px] pointer-events-none"
-                      : ""
-                  }`}
+                  className={`flex w-full items-start gap-3 transition filter`}
                 >
                   <div className="mt-0.5">
                     <CheckToggle
@@ -331,69 +327,6 @@ export default function TodoList({
                     })}
                   </motion.time>
                 </div>
-                <AnimatePresence>
-                  {isConfirmingDelete && (
-                    <motion.div
-                      key="confirm"
-                      initial={
-                        prefersReducedMotion
-                          ? false
-                          : { opacity: 0, scale: 0.9 }
-                      }
-                      animate={
-                        prefersReducedMotion ? {} : { opacity: 1, scale: 1 }
-                      }
-                      exit={
-                        prefersReducedMotion ? {} : { opacity: 0, scale: 0.9 }
-                      }
-                      transition={{
-                        type: "spring",
-                        stiffness: 300,
-                        damping: 25,
-                      }}
-                      role="dialog"
-                      aria-modal="true"
-                      className="absolute inset-0 z-10 flex flex-col justify-center rounded border border-red-400 bg-red-50/95 dark:bg-red-950/80 backdrop-blur-sm p-3"
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") setConfirmDeleteId(null);
-                        if (e.key === "Enter") {
-                          if (!allowDelete) {
-                            onBlockedDelete?.();
-                            setConfirmDeleteId(null);
-                          } else {
-                            removeTodo(todo.id);
-                            setConfirmDeleteId(null);
-                          }
-                        }
-                      }}
-                    >
-                      <p className="text-sm font-medium text-red-800 dark:text-red-200 mb-3 break-words">
-                        Delete this todo?
-                      </p>
-                      <div className="flex gap-2 justify-end text-xs">
-                        <button
-                          onClick={() => {
-                            if (!allowDelete) {
-                              onBlockedDelete?.();
-                            } else {
-                              removeTodo(todo.id);
-                            }
-                            setConfirmDeleteId(null);
-                          }}
-                          className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-500"
-                        >
-                          Confirm
-                        </button>
-                        <button
-                          onClick={() => setConfirmDeleteId(null)}
-                          className="px-3 py-1 rounded border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               </motion.li>
             );
           })}

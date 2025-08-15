@@ -2,6 +2,7 @@ import "./globals.css";
 import { AuthProvider } from "./components/auth/AuthProvider";
 import HeaderAuth from "./components/auth/HeaderAuth";
 import Toaster from "./components/ui/Toaster";
+import ReduxProvider from "./store/ReduxProvider";
 import { Nunito_Sans } from "next/font/google";
 
 // Optimize font loading
@@ -28,13 +29,15 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" className={nunitoSans.variable}>
       <body className="antialiased font-nunito">
-        <AuthProvider>
-          <div className="max-w-3xl mx-auto px-4 pt-6">
-            <HeaderAuth />
-            {children}
-          </div>
-          <Toaster />
-        </AuthProvider>
+        <ReduxProvider>
+          <AuthProvider>
+            <div className="max-w-3xl mx-auto px-4 pt-6">
+              <HeaderAuth />
+              {children}
+            </div>
+            <Toaster />
+          </AuthProvider>
+        </ReduxProvider>
       </body>
     </html>
   );
