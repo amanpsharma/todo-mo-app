@@ -1,19 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../auth/AuthProvider";
 import { useTodos } from "./useTodos";
 import { useShares } from "../shares/useShares";
 import {
   FILTERS,
-  sanitizeCategoryName,
   isValidEmail,
   getAuthToken,
-  DEFAULT_CATEGORIES,
-  hasEditPermission,
-  hasDeletePermission,
-  hasWritePermission,
   getFooterText,
   getDeleteTodoMessage,
   showToast,
@@ -31,9 +26,10 @@ import SharedTodosList from "../shares/SharedTodosList";
 import DeleteCategoryModal from "../categories/DeleteCategoryModal";
 import LoggedOutHero from "../ui/LoggedOutHero";
 import AddCategoryModal from "../categories/AddCategoryModal";
-import { toast } from "react-toastify";
 import ConfirmModal from "../ui/ConfirmModal";
 import { useDispatch, useSelector } from "react-redux";
+import useCategoryState from "../../hooks/useCategoryState";
+import useSharedView from "../../hooks/useSharedView";
 import {
   setFilter as setFilterGlobal,
   setCategoryFilter as setCategoryFilterGlobal,
@@ -56,6 +52,55 @@ export default function TodoApp() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const uid = user?.uid;
+  const dispatch = useDispatch();
+
+  // Load custom UI state from Redux
+  const filter = useSelector((s) => s.ui.filter);
+  const categoryFilter = useSelector((s) => s.ui.categoryFilter);
+  const editingId = useSelector((s) => s.ui.editingId);
+  const editingText = useSelector((s) => s.ui.editingText);
+  const editingCategory = useSelector((s) => s.ui.editingCategory);
+  const confirmDeleteId = useSelector((s) => s.ui.confirmDeleteId);
+  const confirmDeleteCategory = useSelector((s) => s.ui.confirmDeleteCategory);
+  const confirmClearOpen = useSelector((s) => s.ui.confirmClearOpen);
+
+  // Redux action dispatchers
+  const setFilter = useCallback(
+    (val) => dispatch(setFilterGlobal(val)),
+    [dispatch]
+  );
+  const setCategoryFilter = useCallback(
+    (val) => dispatch(setCategoryFilterGlobal(val)),
+    [dispatch]
+  );
+  const setEditingText = useCallback(
+    (val) => dispatch(setEditingTextGlobal(val)),
+    [dispatch]
+  );
+  const setEditingCategory = useCallback(
+    (val) => dispatch(setEditingCategoryGlobal(val)),
+    [dispatch]
+  );
+  const cancelEdit = useCallback(
+    () => dispatch(cancelEditGlobal()),
+    [dispatch]
+  );
+  const setConfirmDeleteId = useCallback(
+    (id) => {
+      id ? dispatch(openConfirmDelete(id)) : dispatch(closeConfirmDelete());
+    },
+    [dispatch]
+  );
+  const setConfirmDeleteCategory = useCallback(
+    (val) => dispatch(setConfirmDeleteCategoryGlobal(val)),
+    [dispatch]
+  );
+  const setConfirmClearOpen = useCallback(
+    (open) => {
+      open ? dispatch(openConfirmClear()) : dispatch(closeConfirmClear());
+    },
+    [dispatch]
+  );
 
   const {
     todos,
@@ -74,156 +119,20 @@ export default function TodoApp() {
   const [input, setInput] = useState("");
   const [createCategory, setCreateCategory] = useState("");
   const [addCategoryOpen, setAddCategoryOpen] = useState(false);
-  const baseCategories = useMemo(() => DEFAULT_CATEGORIES, []);
-  const [customCategories, setCustomCategories] = useState([]);
-  // Persist custom categories
-  useEffect(() => {
-    try {
-      const raw =
-        typeof window !== "undefined" &&
-        localStorage.getItem("customCategories");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) setCustomCategories(parsed.filter(Boolean));
-      }
-    } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  useEffect(() => {
-    try {
-      if (typeof window !== "undefined") {
-        localStorage.setItem(
-          "customCategories",
-          JSON.stringify(customCategories)
-        );
-      }
-    } catch {}
-  }, [customCategories]);
+  const {
+    baseCategories,
+    customCategories,
+    setCustomCategories,
+    categories,
+    categoriesWithTodos,
+    newCategory,
+    setNewCategory,
+    handleAddNewCategory,
+  } = useCategoryState(todos);
 
-  const categoriesFromTodos = useMemo(() => {
-    const set = new Set(
-      todos.map((t) => {
-        const cleaned = sanitizeCategoryName(t.category || "general");
-        return cleaned || "general";
-      })
-    );
-    return Array.from(set);
-  }, [todos]);
-  // Remember categories discovered from todos
-  useEffect(() => {
-    if (!categoriesFromTodos.length) return;
-    setCustomCategories((prev) => {
-      const next = new Set(prev);
-      for (const c of categoriesFromTodos) {
-        if (!baseCategories.includes(c)) next.add(c);
-      }
-      return Array.from(next);
-    });
-  }, [categoriesFromTodos, baseCategories]);
+  // No-op: category state handled by hook; keep local input for modal initial value
 
-  const categories = useMemo(() => {
-    const set = new Set([
-      ...baseCategories,
-      ...categoriesFromTodos,
-      ...customCategories,
-    ]);
-    return Array.from(set);
-  }, [baseCategories, categoriesFromTodos, customCategories]);
-  const [newCategory, setNewCategory] = useState("general");
-  useEffect(() => {
-    if (!categories.includes(newCategory) && categories.length) {
-      setNewCategory(categories[0]);
-    }
-  }, [categories, newCategory]);
-  // (moved below after categoryFilter is initialized)
-
-  const categoriesWithTodos = useMemo(() => {
-    const set = new Set(
-      todos.map((t) => {
-        const cleaned = sanitizeCategoryName(t.category || "general");
-        return cleaned || "general";
-      })
-    );
-    return Array.from(set);
-  }, [todos]);
-
-  const handleAddNewCategory = (name) => {
-    const cat = sanitizeCategoryName(name || createCategory);
-    if (!cat) return;
-    setCustomCategories((prev) => (prev.includes(cat) ? prev : [...prev, cat]));
-    setNewCategory(cat);
-    setCreateCategory("");
-  };
-
-  const submit = async (e) => {
-    e.preventDefault();
-    const text = input.trim();
-    if (!text) return;
-    // Shared view: add to owner's list if allowed, else toast
-    if (sharedView) {
-      const cat = sharedView.category || "general";
-      if (!hasWritePermission(sharedPerms)) {
-        showToast("You don't have permission to add in this category.");
-        return;
-      }
-      // optimistic add
-      const tempId = `tmp-${Date.now()}`;
-      const optimistic = {
-        id: tempId,
-        uid: sharedView.ownerUid,
-        text,
-        completed: false,
-        createdAt: Date.now(),
-        category: cat,
-      };
-      const prev = sharedTodos;
-      setSharedTodos((curr) => [optimistic, ...(curr || [])]);
-      setInput("");
-      try {
-        const token = await getToken();
-        const res = await fetch(`/api/todos`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            text,
-            category: cat,
-            ownerUid: sharedView.ownerUid,
-          }),
-        });
-        if (!res.ok) {
-          if (res.status === 403)
-            showToast("You don't have permission to add in this category.");
-          else showToast("Add failed");
-          setSharedTodos(prev); // revert
-          return;
-        }
-        const created = await res.json();
-        setSharedTodos((curr) =>
-          (curr || []).map((t) =>
-            t.id === tempId ? { ...optimistic, ...created } : t
-          )
-        );
-      } catch {
-        showToast("Add failed");
-        setSharedTodos(prev);
-      }
-      return;
-    }
-    // Own list via useTodos (optimistic + refresh)
-    await addTodo(text, newCategory || "general");
-    setInput("");
-  };
-
-  // Filters (Redux)
-  const dispatch = useDispatch();
-  const filter = useSelector((s) => s.ui.filter);
-  const categoryFilter = useSelector((s) => s.ui.categoryFilter);
-  const setFilter = (val) => dispatch(setFilterGlobal(val));
-  const setCategoryFilter = (val) => dispatch(setCategoryFilterGlobal(val));
-  // Keep the Add form's category in sync with the current category filter (own list only)
+  // Visible todos based on filters
   const visible = useMemo(() => {
     let list = todos;
     if (categoryFilter !== "all") {
@@ -232,43 +141,27 @@ export default function TodoApp() {
     return list.filter(FILTERS[filter]);
   }, [todos, filter, categoryFilter]);
 
-  // Edit state (Redux)
-  const editingId = useSelector((s) => s.ui.editingId);
-  const editingText = useSelector((s) => s.ui.editingText);
-  const editingCategory = useSelector((s) => s.ui.editingCategory);
-  const setEditingText = (val) => dispatch(setEditingTextGlobal(val));
-  const setEditingCategory = (val) => dispatch(setEditingCategoryGlobal(val));
-  const startEdit = (todo) =>
-    dispatch(
-      startEditGlobal({
-        id: todo.id,
-        text: todo.text,
-        category: todo.category || "general",
-      })
-    );
-  const saveEdit = async () => {
+  const startEdit = useCallback(
+    (todo) =>
+      dispatch(
+        startEditGlobal({
+          id: todo.id,
+          text: todo.text,
+          category: todo.category || "general",
+        })
+      ),
+    [dispatch]
+  );
+
+  const saveEdit = useCallback(async () => {
     if (!editingId) return;
     const text = editingText.trim();
     if (!text) return;
+
     await editTodo(editingId, text, editingCategory);
     dispatch(cancelEditGlobal());
-  };
-  const cancelEdit = () => dispatch(cancelEditGlobal());
+  }, [editingId, editingText, editingCategory, editTodo, dispatch]);
 
-  // Confirms and toast (Redux)
-  const confirmDeleteId = useSelector((s) => s.ui.confirmDeleteId);
-  const confirmDeleteCategory = useSelector((s) => s.ui.confirmDeleteCategory);
-  const confirmClearOpen = useSelector((s) => s.ui.confirmClearOpen);
-  const setConfirmDeleteId = (id) => {
-    if (id) dispatch(openConfirmDelete(id));
-    else dispatch(closeConfirmDelete());
-  };
-  const setConfirmDeleteCategory = (val) =>
-    dispatch(setConfirmDeleteCategoryGlobal(val));
-  const setConfirmClearOpen = (open) => {
-    if (open) dispatch(openConfirmClear());
-    else dispatch(closeConfirmClear());
-  };
   const [lastDeleted, setLastDeleted] = useState(null);
   const [pendingRestore, setPendingRestore] = useState(null);
 
@@ -289,82 +182,110 @@ export default function TodoApp() {
       setShareCategory(categories[0]);
     }
   }, [categories, shareCategory]);
+
   const [shareEmail, setShareEmail] = useState("");
   const [shareBusy, setShareBusy] = useState(false);
   const [shareMsg, setShareMsg] = useState("");
 
-  const handleShare = async (permissionsArg, emailArg) => {
-    // backward compatibility: if first arg is email, shift
-    let perms = Array.isArray(permissionsArg) ? permissionsArg : ["read"];
-    let emailAuto = emailArg;
-    if (typeof permissionsArg === "string" && emailArg === undefined) {
-      emailAuto = permissionsArg;
-      perms = ["read"];
-    }
-    const email = String(emailArg ?? shareEmail)
-      .trim()
-      .toLowerCase();
-    if (!isValidEmail(email)) {
-      setShareMsg("Enter a valid email");
-      return false;
-    }
-    try {
+  const handleShare = useCallback(
+    async (permissionsArg, emailArg) => {
+      // backward compatibility: if first arg is email, shift
+      let perms = Array.isArray(permissionsArg) ? permissionsArg : ["read"];
+      let emailAuto = emailArg;
+
+      if (typeof permissionsArg === "string" && emailArg === undefined) {
+        emailAuto = permissionsArg;
+        perms = ["read"];
+      }
+
+      const email = String(emailArg ?? shareEmail)
+        .trim()
+        .toLowerCase();
+      if (!isValidEmail(email)) {
+        setShareMsg("Enter a valid email");
+        return false;
+      }
+
+      try {
+        setShareBusy(true);
+        setShareMsg("");
+        await createShare(shareCategory, email, perms);
+        setShareMsg("Shared");
+        if (!emailArg) setShareEmail("");
+        return true;
+      } catch (e) {
+        setShareMsg("Failed to share");
+        return false;
+      } finally {
+        setShareBusy(false);
+      }
+    },
+    [shareCategory, shareEmail, createShare]
+  );
+
+  const handleShareMany = useCallback(
+    async (emails, permissionsArg) => {
+      const list = Array.isArray(emails) ? emails : [];
+      const cleaned = list
+        .map((e) =>
+          String(e || "")
+            .trim()
+            .toLowerCase()
+        )
+        .filter((e, idx, arr) => e && arr.indexOf(e) === idx);
+
+      if (!cleaned.length) {
+        setShareMsg("Add at least one valid email");
+        return;
+      }
+
       setShareBusy(true);
       setShareMsg("");
-      await createShare(shareCategory, email, perms);
-      setShareMsg("Shared");
-      if (!emailArg) setShareEmail("");
-      return true;
-    } catch (e) {
-      setShareMsg("Failed to share");
-      return false;
-    } finally {
-      setShareBusy(false);
-    }
-  };
+      const perms = Array.isArray(permissionsArg) ? permissionsArg : ["read"];
 
-  const handleShareMany = async (emails, permissionsArg) => {
-    const list = Array.isArray(emails) ? emails : [];
-    const cleaned = list
-      .map((e) =>
-        String(e || "")
-          .trim()
-          .toLowerCase()
-      )
-      .filter((e, idx, arr) => e && arr.indexOf(e) === idx);
-    if (!cleaned.length) {
-      setShareMsg("Add at least one valid email");
-      return;
-    }
-    setShareBusy(true);
-    setShareMsg("");
-    const perms = Array.isArray(permissionsArg) ? permissionsArg : ["read"];
-    let ok = 0,
-      fail = 0;
-    for (const e of cleaned) {
-      if (!isValidEmail(e)) {
-        fail++;
-        continue;
+      let ok = 0,
+        fail = 0;
+      for (const e of cleaned) {
+        if (!isValidEmail(e)) {
+          fail++;
+          continue;
+        }
+        try {
+          await createShare(shareCategory, e, perms);
+          ok++;
+        } catch {
+          fail++;
+        }
       }
-      try {
-        await createShare(shareCategory, e, perms);
-        ok++;
-      } catch {
-        fail++;
-      }
-    }
-    setShareMsg(
-      `Shared ${ok}/${cleaned.length}${fail ? `, failed ${fail}` : ""}`
-    );
-    setShareBusy(false);
-  };
+
+      setShareMsg(
+        `Shared ${ok}/${cleaned.length}${fail ? `, failed ${fail}` : ""}`
+      );
+      setShareBusy(false);
+    },
+    [shareCategory, createShare]
+  );
 
   // Shared view
-  const [sharedView, setSharedView] = useState(null);
-  const [sharedTodos, setSharedTodos] = useState([]);
-  const [sharedLoading, setSharedLoading] = useState(false);
-  const [sharedPerms, setSharedPerms] = useState(["read"]);
-  const urlInitializedRef = useRef(false);
+  const {
+    sharedView,
+    setSharedView,
+    sharedTodos,
+    setSharedTodos,
+    sharedLoading,
+    sharedPerms,
+    urlInitializedRef,
+    sharedVisible,
+    sharedStats,
+    canEdit,
+    canDelete,
+    canWrite,
+    requireEdit,
+    requireDelete,
+    requireWrite,
+    loadSharedTodos,
+    removeSharedTodo,
+  } = useSharedView(uid, filter);
   const getToken = getAuthToken;
 
   // Keep the Add form's category in sync with the current category filter (own list only)
@@ -375,138 +296,71 @@ export default function TodoApp() {
     }
   }, [categoryFilter, sharedView]);
 
-  const loadSharedTodos = async (ownerUid, category, ownerDisplay) => {
-    try {
-      setSharedLoading(true);
-      setSharedView({ ownerUid, ownerEmail: ownerDisplay, category });
+  const leaveSharedCategory = useCallback(
+    async (ownerUid, category) => {
+      if (hookLeaveSharedCategory) {
+        return hookLeaveSharedCategory(ownerUid, category);
+      }
+
       const token = await getToken();
-      const res = await fetch(
-        `/api/todos?owner=${encodeURIComponent(
-          ownerUid
-        )}&category=${encodeURIComponent(category)}`,
-        { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
-      );
-      if (!res.ok) {
-        if (res.status === 403) {
-          // No permission to view
-          showToast("You don't have permission to view this category.");
-          // Exit shared view if we just entered it
-          setSharedView(null);
-        } else {
-          showToast("Failed to load shared todos");
-        }
-        return;
-      }
-      const data = await res.json();
-      setSharedTodos(data || []);
-    } catch (e) {
-      console.error(e);
-      showToast("Failed to load shared todos");
-    } finally {
-      setSharedLoading(false);
-    }
-  };
+      const res = await fetch(`/api/shares`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ ownerUid, category }),
+      });
 
-  // Load permissions for current shared view
-  useEffect(() => {
-    const run = async () => {
-      if (!sharedView || !uid) return;
-      try {
-        const token = await getToken();
-        const res = await fetch(
-          `/api/shares?owner=${encodeURIComponent(
-            sharedView.ownerUid
-          )}&category=${encodeURIComponent(sharedView.category)}`,
-          { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
-        );
-        if (!res.ok) {
-          setSharedPerms(["read"]);
-          return;
-        }
-        const j = await res.json();
-        const arr =
-          Array.isArray(j.permissions) && j.permissions.length
-            ? j.permissions
-            : ["read"];
-        setSharedPerms(arr);
-      } catch (e) {
-        setSharedPerms(["read"]);
-      }
-    };
-    run();
-  }, [sharedView, uid, getToken]);
-
-  // showToast now imported from utils
-
-  const leaveSharedCategory = hookLeaveSharedCategory
-    ? hookLeaveSharedCategory
-    : async (ownerUid, category) => {
-        const token = await getToken();
-        const res = await fetch(`/api/shares`, {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ ownerUid, category }),
-        });
-        if (!res.ok) throw new Error("Leave share failed");
-        await (refreshShares?.() || Promise.resolve());
-      };
+      if (!res.ok) throw new Error("Leave share failed");
+      await (refreshShares?.() || Promise.resolve());
+    },
+    [hookLeaveSharedCategory, getToken, refreshShares]
+  );
 
   // Initialize from URL
   useEffect(() => {
-    if (!mounted) return;
-    if (!categories.length) return;
-    if (urlInitializedRef.current) return;
+    if (!mounted || !categories.length || urlInitializedRef.current) return;
+
     const c = searchParams.get("category");
     if (c === "all" && categoryFilter !== "all") setCategoryFilter("all");
     else if (c && categories.includes(c) && c !== categoryFilter) {
       setCategoryFilter(c);
     }
+
     const f = (searchParams.get("filter") || "").toLowerCase();
     if (["all", "active", "completed"].includes(f) && f !== filter) {
       setFilter(f);
     }
+
     const owner = searchParams.get("sharedOwner");
     const scat = searchParams.get("sharedCategory");
     if (uid && owner && scat && !sharedView) {
       loadSharedTodos(owner, scat, owner);
     }
-    urlInitializedRef.current = true;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mounted, categories, uid]);
 
-  // Reflect category in URL
+    urlInitializedRef.current = true;
+  }, [
+    mounted,
+    categories,
+    uid,
+    searchParams,
+    categoryFilter,
+    filter,
+    sharedView,
+    setCategoryFilter,
+    setFilter,
+    loadSharedTodos,
+  ]);
+
+  // Reflect category, filter and shared view in URL (batched)
   useEffect(() => {
-    if (!mounted || !uid) return;
+    if (!mounted) return;
+
     const params = new URLSearchParams(searchParams.toString());
     params.set("category", categoryFilter || "all");
-    const q = params.toString();
-    router.replace(q ? `${pathname}?${q}` : pathname);
-  }, [categoryFilter, mounted, pathname, router, searchParams, uid]);
-
-  // Reflect filter in URL
-  useEffect(() => {
-    if (!mounted || !uid) return;
-    const params = new URLSearchParams(searchParams.toString());
     params.set("filter", filter || "all");
-    const q = params.toString();
-    router.replace(q ? `${pathname}?${q}` : pathname);
-  }, [filter, mounted, pathname, router, searchParams, uid]);
 
-  // Logged out: strip params
-  useEffect(() => {
-    if (!mounted) return;
-    if (!loading && !uid) {
-      router.replace(pathname);
-    }
-  }, [mounted, loading, uid, pathname, router]);
-
-  // Reflect shared view in URL
-  useEffect(() => {
-    if (!mounted) return;
-    const params = new URLSearchParams(searchParams.toString());
     if (sharedView) {
       params.set("sharedOwner", sharedView.ownerUid);
       params.set("sharedCategory", sharedView.category);
@@ -514,11 +368,144 @@ export default function TodoApp() {
       params.delete("sharedOwner");
       params.delete("sharedCategory");
     }
+
     const q = params.toString();
     router.replace(q ? `${pathname}?${q}` : pathname);
-  }, [sharedView, mounted, pathname, router, searchParams]);
+  }, [
+    mounted,
+    pathname,
+    router,
+    searchParams,
+    categoryFilter,
+    filter,
+    sharedView,
+  ]);
+
+  // Logged out: strip params
+  useEffect(() => {
+    if (mounted && !loading && !uid) {
+      router.replace(pathname);
+    }
+  }, [mounted, loading, uid, pathname, router]);
+
+  // Handle form submission
+  const submit = useCallback(
+    async (e) => {
+      e.preventDefault();
+      const text = input.trim();
+      if (!text) return;
+
+      // Shared view: add to owner's list if allowed
+      if (sharedView) {
+        const cat = sharedView.category || "general";
+        if (!requireWrite()) return;
+
+        // optimistic add
+        const tempId = `tmp-${Date.now()}`;
+        const optimistic = {
+          id: tempId,
+          uid: sharedView.ownerUid,
+          text,
+          completed: false,
+          createdAt: Date.now(),
+          category: cat,
+        };
+
+        const prev = sharedTodos;
+        setSharedTodos((curr) => [optimistic, ...(curr || [])]);
+        setInput("");
+
+        try {
+          const token = await getToken();
+          const res = await fetch(`/api/todos`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              text,
+              category: cat,
+              ownerUid: sharedView.ownerUid,
+            }),
+          });
+
+          if (!res.ok) {
+            if (res.status === 403)
+              showToast("You don't have permission to add in this category.");
+            else showToast("Add failed");
+
+            setSharedTodos(prev); // revert
+            return;
+          }
+
+          const created = await res.json();
+          setSharedTodos((curr) =>
+            (curr || []).map((t) =>
+              t.id === tempId ? { ...optimistic, ...created } : t
+            )
+          );
+        } catch {
+          showToast("Add failed");
+          setSharedTodos(prev);
+        }
+        return;
+      }
+
+      // Own list via useTodos
+      await addTodo(text, newCategory || "general");
+      setInput("");
+    },
+    [
+      input,
+      sharedView,
+      requireWrite,
+      sharedTodos,
+      getToken,
+      addTodo,
+      newCategory,
+    ]
+  );
+
+  // removeSharedTodo provided by useSharedView hook
+
+  const handleRemoveTodo = useCallback(
+    async (id) => {
+      const idx = todos.findIndex((x) => x.id === id);
+      const t = idx >= 0 ? todos[idx] : null;
+
+      await removeTodo(id);
+
+      if (t) {
+        const prevId = idx > 0 ? todos[idx - 1].id : null;
+        setLastDeleted({
+          id: t.id,
+          text: t.text,
+          category: t.category,
+          prevId,
+        });
+
+        showUndoDeleteToast(`Deleted: "${t.text}"`, async () => {
+          setPendingRestore({
+            text: t.text,
+            category: t.category || "general",
+            prevId: prevId || null,
+          });
+          setLastDeleted(null);
+          await addTodo(t.text, t.category || "general");
+        });
+      }
+    },
+    [todos, removeTodo, addTodo]
+  );
+
+  const deleteTodoMessage = getDeleteTodoMessage(
+    sharedView ? sharedTodos : todos,
+    confirmDeleteId
+  );
 
   if (!mounted) return null;
+
   if (loading) {
     return (
       <div className="w-full max-w-xl mx-auto">
@@ -526,52 +513,9 @@ export default function TodoApp() {
       </div>
     );
   }
+
   if (!uid)
     return <LoggedOutHero loading={loading} loginGoogle={loginGoogle} />;
-
-  // Shared delete helper to ensure consistent toasts and optimistic updates
-  const removeSharedTodo = async (id) => {
-    const token = await getToken();
-    // optimistic remove
-    const prev = sharedTodos;
-    setSharedTodos((curr) => (curr || []).filter((t) => t.id !== id));
-    const res = await fetch(`/api/todos?id=${encodeURIComponent(id)}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) {
-      if (res.status === 403)
-        showToast("You don't have permission to delete in this category.");
-      else showToast("Delete failed");
-      // revert
-      setSharedTodos(prev);
-    }
-  };
-
-  const handleRemoveTodo = async (id) => {
-    const idx = todos.findIndex((x) => x.id === id);
-    const t = idx >= 0 ? todos[idx] : null;
-    await removeTodo(id);
-    if (t) {
-      const prevId = idx > 0 ? todos[idx - 1].id : null;
-      setLastDeleted({ id: t.id, text: t.text, category: t.category, prevId });
-      // show undo toast for own deletions only
-      showUndoDeleteToast(`Deleted: "${t.text}"`, async () => {
-        setPendingRestore({
-          text: t.text,
-          category: t.category || "general",
-          prevId: prevId || null,
-        });
-        setLastDeleted(null);
-        await addTodo(t.text, t.category || "general");
-      });
-    }
-  };
-
-  const deleteTodoMessage = getDeleteTodoMessage(
-    sharedView ? sharedTodos : todos,
-    confirmDeleteId
-  );
 
   return (
     <div className="w-full max-w-xl mx-auto flex flex-col gap-6">
@@ -582,8 +526,7 @@ export default function TodoApp() {
           sharedView ? sharedView.category || "general" : newCategory
         }
         setNewCategory={(val) => {
-          if (sharedView) return; // locked in shared view
-          setNewCategory(val);
+          if (!sharedView) setNewCategory(val);
         }}
         categories={
           sharedView ? [sharedView.category || "general"] : categories
@@ -597,9 +540,10 @@ export default function TodoApp() {
       <FiltersBar
         filter={filter}
         setFilter={setFilter}
-        stats={stats}
+        stats={sharedView ? sharedStats : stats}
         clearCompleted={clearCompleted}
-        onClearCompletedClick={() => setConfirmClearOpen(true)}
+        onClearCompletedClick={() => !sharedView && setConfirmClearOpen(true)}
+        readOnly={!!sharedView}
       />
 
       {!sharedView && (
@@ -653,19 +597,18 @@ export default function TodoApp() {
           removeTodo={handleRemoveTodo}
           filter={filter}
         />
-      ) : Array.isArray(sharedPerms) &&
-        (hasEditPermission(sharedPerms) || hasDeletePermission(sharedPerms)) ? (
+      ) : Array.isArray(sharedPerms) && (canEdit || canDelete) ? (
         <TodoList
-          visible={sharedTodos}
+          visible={sharedVisible}
           categories={Array.from(
             new Set(sharedTodos.map((t) => t.category || "general"))
           )}
           loading={sharedLoading}
-          allowEdit={hasEditPermission(sharedPerms)}
+          allowEdit={canEdit}
           onBlockedEdit={() =>
             showToast("You don't have permission to edit in this category.")
           }
-          allowDelete={hasDeletePermission(sharedPerms)}
+          allowDelete={canDelete}
           onBlockedDelete={() =>
             showToast("You don't have permission to delete in this category.")
           }
@@ -675,10 +618,7 @@ export default function TodoApp() {
           editingCategory={editingCategory}
           setEditingCategory={setEditingCategory}
           startEdit={(todo) => {
-            if (!hasEditPermission(sharedPerms)) {
-              showToast("You don't have permission to edit in this category.");
-              return;
-            }
+            if (!requireEdit()) return;
             dispatch(
               startEditGlobal({
                 id: todo.id,
@@ -691,8 +631,7 @@ export default function TodoApp() {
             if (!editingId) return;
             const text = editingText.trim();
             if (!text) return;
-            if (!hasEditPermission(sharedPerms)) {
-              showToast("You don't have permission to edit in this category.");
+            if (!requireEdit()) {
               dispatch(cancelEditGlobal());
               return;
             }
@@ -739,24 +678,14 @@ export default function TodoApp() {
               dispatch(cancelEditGlobal());
             }
           }}
-          cancelEdit={() => {
-            dispatch(cancelEditGlobal());
-          }}
+          cancelEdit={cancelEdit}
           confirmDeleteId={confirmDeleteId}
           setConfirmDeleteId={(id) => {
-            if (!hasDeletePermission(sharedPerms)) {
-              showToast(
-                "You don't have permission to delete in this category."
-              );
-              return;
-            }
+            if (!requireDelete()) return;
             setConfirmDeleteId(id);
           }}
           toggleTodo={async (id) => {
-            if (!hasEditPermission(sharedPerms)) {
-              showToast("You don't have permission to edit in this category.");
-              return;
-            }
+            if (!requireEdit()) return;
             const t = sharedTodos.find((x) => x.id === id);
             if (!t) return;
             const token = await getToken();
@@ -785,15 +714,13 @@ export default function TodoApp() {
               setSharedTodos(prev);
             }
           }}
-          removeTodo={async (id) => {
-            await removeSharedTodo(id);
-          }}
+          removeTodo={removeSharedTodo}
           filter={filter}
         />
       ) : (
         <SharedTodosList
           sharedView={sharedView}
-          sharedTodos={sharedTodos}
+          sharedTodos={sharedVisible}
           sharedLoading={sharedLoading}
           onAttemptAction={() =>
             showToast(
@@ -803,15 +730,13 @@ export default function TodoApp() {
         />
       )}
 
-      {(() => {
-        const text = getFooterText(
+      <p className="text-[11px] text-neutral-500 text-center">
+        {getFooterText(
           sharedView,
           Array.isArray(sharedPerms) ? sharedPerms : ["read"]
-        );
-        return (
-          <p className="text-[11px] text-neutral-500 text-center">{text}</p>
-        );
-      })()}
+        )}
+      </p>
+
       <DeleteCategoryModal
         open={!!confirmDeleteCategory}
         category={confirmDeleteCategory || ""}
@@ -825,6 +750,7 @@ export default function TodoApp() {
           setConfirmDeleteCategory(null);
         }}
       />
+
       <AddCategoryModal
         open={addCategoryOpen}
         initialValue={createCategory}
@@ -834,7 +760,6 @@ export default function TodoApp() {
           setAddCategoryOpen(false);
         }}
       />
-      {/* Toasts handled globally via react-toastify */}
 
       <ConfirmModal
         open={!!confirmClearOpen}

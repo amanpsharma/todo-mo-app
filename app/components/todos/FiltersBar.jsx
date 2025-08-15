@@ -8,6 +8,7 @@ export default function FiltersBar({
   stats,
   clearCompleted,
   onClearCompletedClick,
+  readOnly = false,
   filterKeys = ["all", "active", "completed"],
 }) {
   return (
@@ -42,9 +43,13 @@ export default function FiltersBar({
         </span>
         <button
           onClick={onClearCompletedClick || clearCompleted}
-          disabled={!stats.completed}
+          disabled={readOnly || !stats.completed}
           title={
-            stats.completed ? "Clear all completed todos" : "Nothing to clear"
+            readOnly
+              ? "Unavailable in shared view"
+              : stats.completed
+              ? "Clear all completed todos"
+              : "Nothing to clear"
           }
           className="inline-flex items-center gap-2 px-3 py-1 rounded border text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/30"
         >
