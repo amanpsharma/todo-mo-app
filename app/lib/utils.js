@@ -76,7 +76,25 @@ export function getFooterText(sharedView, perms) {
   if (canWrite) return "Viewing shared data (can add)";
   return "Viewing shared data (read-only)";
 }
+// Short, friendly thoughts for the footer during initial load/refresh
+export const FOOTER_THOUGHTS = [
+  "Tip: Press Enter to quickly add a todo.",
+  "Pro tip: Use categories to keep things tidy.",
+  "Shortcut: Filter by Active to focus on what's next.",
+  "Hint: You can share categories with teammates.",
+  "Remember: Small steps add up to big wins.",
+  "Idea: Group urgent tasks under 'urgent' category.",
+  "Focus: Check off one task before starting another.",
+];
 
+export function pickFooterThought() {
+  try {
+    const idx = Math.floor(Math.random() * FOOTER_THOUGHTS.length);
+    return FOOTER_THOUGHTS[idx] || "";
+  } catch {
+    return "";
+  }
+}
 // Build delete confirmation message for a given list and id
 export function getDeleteTodoMessage(list, id) {
   try {

@@ -13,6 +13,7 @@ import {
   getDeleteTodoMessage,
   showToast,
   showUndoDeleteToast,
+  pickFooterThought,
 } from "../../lib/utils";
 import AddTodoForm from "./AddTodoForm";
 import CategoryChips from "../categories/CategoryChips";
@@ -54,7 +55,11 @@ export default function TodoApp() {
   useEffect(() => setMounted(true), []);
   const uid = user?.uid;
   const dispatch = useDispatch();
-
+  const [footerThought, setFooterThought] = useState("");
+  useEffect(() => {
+    // Pick a thought on first mount or after hard refresh
+    setFooterThought(pickFooterThought());
+  }, []);
   // Load custom UI state from Redux
   const filter = useSelector((s) => s.ui.filter);
   const categoryFilter = useSelector((s) => s.ui.categoryFilter);
@@ -276,6 +281,14 @@ export default function TodoApp() {
     removeSharedTodo,
   } = useSharedView(uid, filter);
   const getToken = getAuthToken;
+
+  // Keep the share panel's category in sync with the selected category chip (own list only)
+  useEffect(() => {
+    if (sharedView) return;
+    if (categoryFilter && categoryFilter !== "all") {
+      setShareCategory(categoryFilter);
+    }
+  }, [categoryFilter, sharedView]);
 
   // Keep the Add form's category in sync with the current category filter (own list only)
   useEffect(() => {
@@ -655,12 +668,17 @@ export default function TodoApp() {
         />
       )}
 
-      <p className="text-[11px] text-neutral-500 text-center">
-        {getFooterText(
+      {(() => {
+        const text = getFooterText(
           sharedView,
           Array.isArray(sharedPerms) ? sharedPerms : ["read"]
-        )}
-      </p>
+        );
+        return text ? (
+          <p className="text-[11px] text-neutral-500 text-center">
+            {footerThought}
+          </p>
+        ) : null;
+      })()}
 
       <DeleteCategoryModal
         open={!!confirmDeleteCategory}
