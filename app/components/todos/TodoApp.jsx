@@ -13,7 +13,6 @@ import {
   getDeleteTodoMessage,
   showToast,
   showUndoDeleteToast,
-  pickFooterThought,
 } from "../../lib/utils";
 import AddTodoForm from "./AddTodoForm";
 import CategoryChips from "../categories/CategoryChips";
@@ -29,6 +28,10 @@ import LoggedOutHero from "../ui/LoggedOutHero";
 import AddCategoryModal from "../categories/AddCategoryModal";
 import ConfirmModal from "../ui/ConfirmModal";
 import EditTodoModal from "./EditTodoModal";
+import AppFooterNote from "../ui/AppFooterNote";
+import useFooterThought from "../../hooks/useFooterThought";
+import useUrlSync from "../../hooks/useUrlSync";
+import EditableSharedListSection from "./sections/EditableSharedListSection";
 import { useDispatch, useSelector } from "react-redux";
 import useCategoryState from "../../hooks/useCategoryState";
 import useSharedView from "../../hooks/useSharedView";
@@ -55,11 +58,7 @@ export default function TodoApp() {
   useEffect(() => setMounted(true), []);
   const uid = user?.uid;
   const dispatch = useDispatch();
-  const [footerThought, setFooterThought] = useState("");
-  useEffect(() => {
-    // Pick a thought on first mount or after hard refresh
-    setFooterThought(pickFooterThought());
-  }, []);
+  const footerThought = useFooterThought();
   // Load custom UI state from Redux
   const filter = useSelector((s) => s.ui.filter);
   const categoryFilter = useSelector((s) => s.ui.categoryFilter);
@@ -85,10 +84,6 @@ export default function TodoApp() {
   );
   const setEditingCategory = useCallback(
     (val) => dispatch(setEditingCategoryGlobal(val)),
-    [dispatch]
-  );
-  const cancelEdit = useCallback(
-    () => dispatch(cancelEditGlobal()),
     [dispatch]
   );
   const setConfirmDeleteId = useCallback(
@@ -305,90 +300,29 @@ export default function TodoApp() {
       }
 
       const token = await getToken();
-      const res = await fetch(`/api/shares`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ ownerUid, category }),
-      });
-
-      if (!res.ok) throw new Error("Leave share failed");
+      const { leaveShare } = await import("../../lib/api/shares");
+      await leaveShare({ ownerUid, category }, token);
       await (refreshShares?.() || Promise.resolve());
     },
     [hookLeaveSharedCategory, getToken, refreshShares]
   );
 
-  // Initialize from URL
-  useEffect(() => {
-    if (!mounted || !categories.length || urlInitializedRef.current) return;
-
-    const c = searchParams.get("category");
-    if (c === "all" && categoryFilter !== "all") setCategoryFilter("all");
-    else if (c && categories.includes(c) && c !== categoryFilter) {
-      setCategoryFilter(c);
-    }
-
-    const f = (searchParams.get("filter") || "").toLowerCase();
-    if (["all", "active", "completed"].includes(f) && f !== filter) {
-      setFilter(f);
-    }
-
-    const owner = searchParams.get("sharedOwner");
-    const scat = searchParams.get("sharedCategory");
-    if (uid && owner && scat && !sharedView) {
-      loadSharedTodos(owner, scat, owner);
-    }
-
-    urlInitializedRef.current = true;
-  }, [
+  useUrlSync({
     mounted,
     categories,
-    uid,
+    urlInitializedRef,
     searchParams,
     categoryFilter,
-    filter,
-    sharedView,
     setCategoryFilter,
-    setFilter,
-    loadSharedTodos,
-  ]);
-
-  // Reflect category, filter and shared view in URL (batched)
-  useEffect(() => {
-    if (!mounted) return;
-
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("category", categoryFilter || "all");
-    params.set("filter", filter || "all");
-
-    if (sharedView) {
-      params.set("sharedOwner", sharedView.ownerUid);
-      params.set("sharedCategory", sharedView.category);
-    } else {
-      params.delete("sharedOwner");
-      params.delete("sharedCategory");
-    }
-
-    const q = params.toString();
-    router.replace(q ? `${pathname}?${q}` : pathname);
-  }, [
-    mounted,
-    pathname,
-    router,
-    searchParams,
-    categoryFilter,
     filter,
+    setFilter,
+    uid,
     sharedView,
-  ]);
-
-  // Logged out: strip params
-  useEffect(() => {
-    if (mounted && !loading && !uid) {
-      router.replace(pathname);
-    }
-  }, [mounted, loading, uid, pathname, router]);
+    loadSharedTodos,
+    router,
+    pathname,
+    loading,
+  });
 
   // Handle form submission
   const submit = useCallback(
@@ -419,36 +353,24 @@ export default function TodoApp() {
 
         try {
           const token = await getToken();
-          const res = await fetch(`/api/todos`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
+          const { createTodo } = await import("../../lib/api/todos");
+          const created = await createTodo(
+            {
               text,
               category: cat,
               ownerUid: sharedView.ownerUid,
-            }),
-          });
-
-          if (!res.ok) {
-            if (res.status === 403)
-              showToast("You don't have permission to add in this category.");
-            else showToast("Add failed");
-
-            setSharedTodos(prev); // revert
-            return;
-          }
-
-          const created = await res.json();
+            },
+            token
+          );
           setSharedTodos((curr) =>
             (curr || []).map((t) =>
               t.id === tempId ? { ...optimistic, ...created } : t
             )
           );
-        } catch {
-          showToast("Add failed");
+        } catch (e) {
+          if (e?.status === 403)
+            showToast("You don't have permission to add in this category.");
+          else showToast("Add failed");
           setSharedTodos(prev);
         }
         return;
@@ -593,22 +515,15 @@ export default function TodoApp() {
           filter={filter}
         />
       ) : Array.isArray(sharedPerms) && (canEdit || canDelete) ? (
-        <TodoList
+        <EditableSharedListSection
+          sharedTodos={sharedTodos}
           visible={sharedVisible}
-          categories={Array.from(
-            new Set(sharedTodos.map((t) => t.category || "general"))
-          )}
           loading={sharedLoading}
           allowEdit={canEdit}
-          onBlockedEdit={() =>
-            showToast("You don't have permission to edit in this category.")
-          }
           allowDelete={canDelete}
-          onBlockedDelete={() =>
-            showToast("You don't have permission to delete in this category.")
-          }
+          requireEdit={requireEdit}
+          requireDelete={requireDelete}
           onEditClick={(todo) => {
-            if (!requireEdit()) return;
             dispatch(
               startEditGlobal({
                 id: todo.id,
@@ -618,40 +533,9 @@ export default function TodoApp() {
             );
           }}
           confirmDeleteId={confirmDeleteId}
-          setConfirmDeleteId={(id) => {
-            if (!requireDelete()) return;
-            setConfirmDeleteId(id);
-          }}
-          toggleTodo={async (id) => {
-            if (!requireEdit()) return;
-            const t = sharedTodos.find((x) => x.id === id);
-            if (!t) return;
-            const token = await getToken();
-            // optimistic toggle
-            const prev = sharedTodos;
-            setSharedTodos((curr) =>
-              (curr || []).map((x) =>
-                x.id === id ? { ...x, completed: !t.completed } : x
-              )
-            );
-            const res = await fetch(`/api/todos`, {
-              method: "PATCH",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({ id, completed: !t.completed }),
-            });
-            if (!res.ok) {
-              if (res.status === 403)
-                showToast(
-                  "You don't have permission to edit in this category."
-                );
-              else showToast("Update failed");
-              // revert
-              setSharedTodos(prev);
-            }
-          }}
+          setConfirmDeleteId={setConfirmDeleteId}
+          setSharedTodos={setSharedTodos}
+          getToken={getToken}
           removeTodo={removeSharedTodo}
           filter={filter}
         />
@@ -673,11 +557,7 @@ export default function TodoApp() {
           sharedView,
           Array.isArray(sharedPerms) ? sharedPerms : ["read"]
         );
-        return text ? (
-          <p className="text-[11px] text-neutral-500 text-center">
-            {footerThought}
-          </p>
-        ) : null;
+        return <AppFooterNote text={text || footerThought} />;
       })()}
 
       <DeleteCategoryModal
@@ -777,23 +657,16 @@ export default function TodoApp() {
               });
               const body = { id: editingId, text };
               if (editingCategory) body.category = editingCategory;
-              const res = await fetch(`/api/todos`, {
-                method: "PATCH",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify(body),
-              });
-              if (!res.ok) {
-                if (res.status === 403)
-                  showToast(
-                    "You don't have permission to edit in this category."
-                  );
-                else showToast("Edit failed");
-                setSharedTodos(prev);
-                return;
-              }
+              const { updateTodo } = await import("../../lib/api/todos");
+              await updateTodo(body, token);
+            } catch (e) {
+              if (e?.status === 403)
+                showToast(
+                  "You don't have permission to edit in this category."
+                );
+              else showToast("Edit failed");
+              setSharedTodos(prev);
+              return;
             } finally {
               dispatch(cancelEditGlobal());
             }

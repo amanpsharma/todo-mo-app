@@ -69,7 +69,7 @@ export const hasDeletePermission = (perms) =>
 
 // Footer helper text based on view and permissions
 export function getFooterText(sharedView, perms) {
-  if (!sharedView) return "Synced securely to your account (MongoDB).";
+  if (!sharedView) return "";
   const canEdit = hasEditPermission(perms) || hasDeletePermission(perms);
   const canWrite = hasWritePermission(perms);
   if (canEdit) return "Viewing shared data (editable)";
