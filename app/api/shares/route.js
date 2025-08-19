@@ -38,6 +38,23 @@ async function getAuthDecoded(req) {
   }
 }
 
+// CORS helper (top-level so all handlers can use it)
+function withCors(res) {
+  try {
+    res.headers.set("Access-Control-Allow-Origin", "*");
+    res.headers.set(
+      "Access-Control-Allow-Methods",
+      "GET,POST,PATCH,DELETE,OPTIONS"
+    );
+    res.headers.set(
+      "Access-Control-Allow-Headers",
+      "Authorization, Content-Type"
+    );
+    res.headers.set("Access-Control-Max-Age", "86400");
+  } catch {}
+  return res;
+}
+
 // GET: list shares. Use query ?my=1 to list shares you created, or ?sharedWithMe=1 to list owners who shared with you
 export async function GET(req) {
   const decoded = await getAuthDecoded(req);
@@ -265,23 +282,6 @@ export async function DELETE(req) {
     );
   }
   return withCors(NextResponse.json({ error: "bad request" }, { status: 400 }));
-  return NextResponse.json({ error: "bad request" }, { status: 400 });
-
-  function withCors(res) {
-    try {
-      res.headers.set("Access-Control-Allow-Origin", "*");
-      res.headers.set(
-        "Access-Control-Allow-Methods",
-        "GET,POST,PATCH,DELETE,OPTIONS"
-      );
-      res.headers.set(
-        "Access-Control-Allow-Headers",
-        "Authorization, Content-Type"
-      );
-      res.headers.set("Access-Control-Max-Age", "86400");
-    } catch {}
-    return res;
-  }
 }
 
 function normalizePerms(arr) {
