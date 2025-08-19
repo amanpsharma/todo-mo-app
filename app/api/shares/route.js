@@ -42,7 +42,9 @@ async function getAuthDecoded(req) {
 export async function GET(req) {
   const decoded = await getAuthDecoded(req);
   if (!decoded)
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    return withCors(
+      NextResponse.json({ error: "unauthorized" }, { status: 401 })
+    );
   const uid = decoded.uid;
   const { searchParams } = new URL(req.url);
   const my = searchParams.get("my");
@@ -59,17 +61,22 @@ export async function GET(req) {
       category,
       $or: [{ viewerUid: uid }, { viewerEmailLower: emailLower }],
     });
-    if (!rec) return NextResponse.json({ error: "not found" }, { status: 404 });
+    if (!rec)
+      return withCors(
+        NextResponse.json({ error: "not found" }, { status: 404 })
+      );
     const { _id, ownerUid, viewerUid, viewerEmailLower, permissions } = rec;
-    return NextResponse.json({
-      id: _id.toString(),
-      ownerUid,
-      category,
-      permissions:
-        Array.isArray(permissions) && permissions.length
-          ? permissions
-          : ["read"],
-    });
+    return withCors(
+      NextResponse.json({
+        id: _id.toString(),
+        ownerUid,
+        category,
+        permissions:
+          Array.isArray(permissions) && permissions.length
+            ? permissions
+            : ["read"],
+      })
+    );
   }
 
   if (my === "1") {
@@ -78,8 +85,10 @@ export async function GET(req) {
       .find({ ownerUid: uid })
       .sort({ createdAt: -1 })
       .toArray();
-    return NextResponse.json(
-      list.map(({ _id, ...r }) => ({ id: _id.toString(), ...r }))
+    return withCors(
+      NextResponse.json(
+        list.map(({ _id, ...r }) => ({ id: _id.toString(), ...r }))
+      )
     );
   }
 
@@ -129,17 +138,19 @@ export async function GET(req) {
       if (!e.ownerName && e.ownerEmail)
         e.ownerName = e.ownerEmail.split("@")[0];
     }
-    return NextResponse.json(Object.values(grouped));
+    return withCors(NextResponse.json(Object.values(grouped)));
   }
 
-  return NextResponse.json({ error: "bad request" }, { status: 400 });
+  return withCors(NextResponse.json({ error: "bad request" }, { status: 400 }));
 }
 
 // POST: create share { category, viewerEmail, permissions?: string[] }
 export async function POST(req) {
   const decoded = await getAuthDecoded(req);
   if (!decoded)
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    return withCors(
+      NextResponse.json({ error: "unauthorized" }, { status: 401 })
+    );
   const uid = decoded.uid;
   const ownerEmail = decoded.email || null;
   const ownerName =
@@ -152,7 +163,9 @@ export async function POST(req) {
     : ["read"];
   const permissions = normalizePerms(rawPerms);
   if (!category || !viewerEmail)
-    return NextResponse.json({ error: "missing fields" }, { status: 400 });
+    return withCors(
+      NextResponse.json({ error: "missing fields" }, { status: 400 })
+    );
   if (category.length > 32) category = category.slice(0, 32);
   if (viewerEmail === (ownerEmail || "").toLowerCase())
     return NextResponse.json(
@@ -189,7 +202,9 @@ export async function POST(req) {
         .collection("shares")
         .updateOne({ _id: existing._id }, { $set: { permissions } });
     }
-    return NextResponse.json({ ok: true, id: existing._id.toString() });
+    return withCors(
+      NextResponse.json({ ok: true, id: existing._id.toString() })
+    );
   }
   const { insertedId } = await db.collection("shares").insertOne({
     ownerUid: uid,
@@ -201,14 +216,16 @@ export async function POST(req) {
     permissions,
     createdAt: Date.now(),
   });
-  return NextResponse.json({ ok: true, id: insertedId.toString() });
+  return withCors(NextResponse.json({ ok: true, id: insertedId.toString() }));
 }
 
 // DELETE: revoke share { category, viewerEmail }
 export async function DELETE(req) {
   const decoded = await getAuthDecoded(req);
   if (!decoded)
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    return withCors(
+      NextResponse.json({ error: "unauthorized" }, { status: 401 })
+    );
   const uid = decoded.uid;
   const emailLower = (decoded.email || "").toLowerCase();
   const body = await req.json().catch(() => ({}));
@@ -218,7 +235,9 @@ export async function DELETE(req) {
   const ownerUidInBody = (body.ownerUid || "").toString().trim();
 
   if (!category)
-    return NextResponse.json({ error: "missing category" }, { status: 400 });
+    return withCors(
+      NextResponse.json({ error: "missing category" }, { status: 400 })
+    );
 
   const db = await getDb();
 
@@ -229,7 +248,9 @@ export async function DELETE(req) {
       category,
       viewerEmailLower: viewerEmail,
     });
-    return NextResponse.json({ ok: true, deleted: res.deletedCount || 0 });
+    return withCors(
+      NextResponse.json({ ok: true, deleted: res.deletedCount || 0 })
+    );
   }
 
   // Case 2: Viewer leaves a shared category from a specific owner
@@ -239,10 +260,28 @@ export async function DELETE(req) {
       category,
       $or: [{ viewerUid: uid }, { viewerEmailLower: emailLower }],
     });
-    return NextResponse.json({ ok: true, deleted: res.deletedCount || 0 });
+    return withCors(
+      NextResponse.json({ ok: true, deleted: res.deletedCount || 0 })
+    );
   }
-
+  return withCors(NextResponse.json({ error: "bad request" }, { status: 400 }));
   return NextResponse.json({ error: "bad request" }, { status: 400 });
+
+  function withCors(res) {
+    try {
+      res.headers.set("Access-Control-Allow-Origin", "*");
+      res.headers.set(
+        "Access-Control-Allow-Methods",
+        "GET,POST,PATCH,DELETE,OPTIONS"
+      );
+      res.headers.set(
+        "Access-Control-Allow-Headers",
+        "Authorization, Content-Type"
+      );
+      res.headers.set("Access-Control-Max-Age", "86400");
+    } catch {}
+    return res;
+  }
 }
 
 function normalizePerms(arr) {

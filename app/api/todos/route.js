@@ -75,7 +75,9 @@ async function ensureSharePermission(
 export async function GET(req) {
   const decoded = await getAuthDecoded(req);
   if (!decoded)
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    return withCors(
+      NextResponse.json({ error: "unauthorized" }, { status: 401 })
+    );
   const uid = decoded.uid;
   const emailLower = (decoded.email || "").toLowerCase();
   const { searchParams } = new URL(req.url);
@@ -101,9 +103,11 @@ export async function GET(req) {
 
   // Viewing another user's todos: must be shared
   if (!category) {
-    return NextResponse.json(
-      { error: "category required for shared view" },
-      { status: 400 }
+    return withCors(
+      NextResponse.json(
+        { error: "category required for shared view" },
+        { status: 400 }
+      )
     );
   }
   const share = await db.collection("shares").findOne({
@@ -112,26 +116,30 @@ export async function GET(req) {
     $or: [{ viewerUid: uid }, { viewerEmailLower: emailLower }],
   });
   if (!share) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    return withCors(NextResponse.json({ error: "forbidden" }, { status: 403 }));
   }
   const docs = await db
     .collection("todos")
     .find({ uid: owner, category })
     .sort({ createdAt: -1 })
     .toArray();
-  return NextResponse.json(
-    docs.map(({ _id, ...r }) => ({
-      id: _id.toString(),
-      category: r.category || "general",
-      ...r,
-    }))
+  return withCors(
+    NextResponse.json(
+      docs.map(({ _id, ...r }) => ({
+        id: _id.toString(),
+        category: r.category || "general",
+        ...r,
+      }))
+    )
   );
 }
 
 export async function POST(req) {
   const decoded = await getAuthDecoded(req);
   if (!decoded)
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    return withCors(
+      NextResponse.json({ error: "unauthorized" }, { status: 401 })
+    );
   const uid = decoded.uid;
   const body = await req.json();
   const text = (body.text || "").trim();
@@ -139,7 +147,8 @@ export async function POST(req) {
   category = category.trim().toLowerCase();
   if (!category) category = "general";
   if (category.length > 32) category = category.slice(0, 32);
-  if (!text) return NextResponse.json({ error: "empty" }, { status: 400 });
+  if (!text)
+    return withCors(NextResponse.json({ error: "empty" }, { status: 400 }));
   const db = await getDb();
   const now = Date.now();
   // If creating on behalf of another owner via share
@@ -153,7 +162,10 @@ export async function POST(req) {
       category,
       "write"
     );
-    if (!ok) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    if (!ok)
+      return withCors(
+        NextResponse.json({ error: "forbidden" }, { status: 403 })
+      );
   }
   const { insertedId } = await db.collection("todos").insertOne({
     uid: targetUid,
@@ -162,29 +174,36 @@ export async function POST(req) {
     createdAt: now,
     category,
   });
-  return NextResponse.json({
-    id: insertedId.toString(),
-    uid: targetUid,
-    text,
-    completed: false,
-    createdAt: now,
-    category,
-  });
+  return withCors(
+    NextResponse.json({
+      id: insertedId.toString(),
+      uid: targetUid,
+      text,
+      completed: false,
+      createdAt: now,
+      category,
+    })
+  );
 }
 
 export async function PATCH(req) {
   const decoded = await getAuthDecoded(req);
   if (!decoded)
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    return withCors(
+      NextResponse.json({ error: "unauthorized" }, { status: 401 })
+    );
   const uid = decoded.uid;
   const body = await req.json();
   const { id, text, completed, category } = body;
-  if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
+  if (!id)
+    return withCors(
+      NextResponse.json({ error: "missing id" }, { status: 400 })
+    );
   const db = await getDb();
   const oid = new (await import("mongodb")).ObjectId(id);
   const existing = await db.collection("todos").findOne({ _id: oid });
   if (!existing)
-    return NextResponse.json({ error: "not found" }, { status: 404 });
+    return withCors(NextResponse.json({ error: "not found" }, { status: 404 }));
 
   // Owner editing own todo
   let actingOnUid = uid;
@@ -197,7 +216,10 @@ export async function PATCH(req) {
       existing.category || "general",
       "edit"
     );
-    if (!ok) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    if (!ok)
+      return withCors(
+        NextResponse.json({ error: "forbidden" }, { status: 403 })
+      );
     actingOnUid = existing.uid;
   }
 
@@ -219,28 +241,34 @@ export async function PATCH(req) {
         "edit"
       );
       if (!ok2)
-        return NextResponse.json({ error: "forbidden" }, { status: 403 });
+        return withCors(
+          NextResponse.json({ error: "forbidden" }, { status: 403 })
+        );
     }
     update.$set.category = cat;
   }
   if (Object.keys(update.$set).length === 0)
-    return NextResponse.json({ error: "no fields" }, { status: 400 });
+    return withCors(NextResponse.json({ error: "no fields" }, { status: 400 }));
   await db.collection("todos").updateOne(filter, update);
   const doc = await db.collection("todos").findOne(filter);
-  return NextResponse.json({
-    id: doc._id.toString(),
-    uid: doc.uid,
-    text: doc.text,
-    completed: doc.completed,
-    createdAt: doc.createdAt,
-    category: doc.category || "general",
-  });
+  return withCors(
+    NextResponse.json({
+      id: doc._id.toString(),
+      uid: doc.uid,
+      text: doc.text,
+      completed: doc.completed,
+      createdAt: doc.createdAt,
+      category: doc.category || "general",
+    })
+  );
 }
 
 export async function DELETE(req) {
   const decoded = await getAuthDecoded(req);
   if (!decoded)
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    return withCors(
+      NextResponse.json({ error: "unauthorized" }, { status: 401 })
+    );
   const uid = decoded.uid;
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
@@ -259,16 +287,16 @@ export async function DELETE(req) {
         "delete"
       );
       if (!ok)
-        return NextResponse.json({ error: "forbidden" }, { status: 403 });
+        return withCors(
+          NextResponse.json({ error: "forbidden" }, { status: 403 })
+        );
     }
-    await db
-      .collection("todos")
-      .deleteMany({
-        uid: targetUid,
-        completed: true,
-        ...(category ? { category: category.trim().toLowerCase() } : {}),
-      });
-    return NextResponse.json({ cleared: true, ownerUid: targetUid });
+    await db.collection("todos").deleteMany({
+      uid: targetUid,
+      completed: true,
+      ...(category ? { category: category.trim().toLowerCase() } : {}),
+    });
+    return withCors(NextResponse.json({ cleared: true, ownerUid: targetUid }));
   }
   if (category) {
     const cat = category.trim().toLowerCase();
@@ -282,21 +310,28 @@ export async function DELETE(req) {
         "delete"
       );
       if (!ok)
-        return NextResponse.json({ error: "forbidden" }, { status: 403 });
+        return withCors(
+          NextResponse.json({ error: "forbidden" }, { status: 403 })
+        );
     }
     const res = await db
       .collection("todos")
       .deleteMany({ uid: targetUid, category: cat });
-    return NextResponse.json({
-      clearedCategory: cat,
-      deletedCount: res.deletedCount || 0,
-    });
+    return withCors(
+      NextResponse.json({
+        clearedCategory: cat,
+        deletedCount: res.deletedCount || 0,
+      })
+    );
   }
-  if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
+  if (!id)
+    return withCors(
+      NextResponse.json({ error: "missing id" }, { status: 400 })
+    );
   const oid = new (await import("mongodb")).ObjectId(id);
   const existing = await db.collection("todos").findOne({ _id: oid });
   if (!existing)
-    return NextResponse.json({ error: "not found" }, { status: 404 });
+    return withCors(NextResponse.json({ error: "not found" }, { status: 404 }));
   if (existing.uid !== uid) {
     const ok = await ensureSharePermission(
       db,
@@ -305,8 +340,27 @@ export async function DELETE(req) {
       existing.category || "general",
       "delete"
     );
-    if (!ok) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    if (!ok)
+      return withCors(
+        NextResponse.json({ error: "forbidden" }, { status: 403 })
+      );
   }
   await db.collection("todos").deleteOne({ _id: oid });
-  return NextResponse.json({ id, ownerUid: existing.uid });
+  return withCors(NextResponse.json({ id, ownerUid: existing.uid }));
+}
+
+function withCors(res) {
+  try {
+    res.headers.set("Access-Control-Allow-Origin", "*");
+    res.headers.set(
+      "Access-Control-Allow-Methods",
+      "GET,POST,PATCH,DELETE,OPTIONS"
+    );
+    res.headers.set(
+      "Access-Control-Allow-Headers",
+      "Authorization, Content-Type"
+    );
+    res.headers.set("Access-Control-Max-Age", "86400");
+  } catch {}
+  return res;
 }
