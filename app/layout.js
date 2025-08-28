@@ -28,7 +28,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={nunitoSans.variable}>
-      <body className="antialiased font-nunito">
+      <body className="antialiased font-nunito" suppressHydrationWarning={true}>
         <ReduxProvider>
           <AuthProvider>
             <div className="max-w-3xl mx-auto px-4 pt-6">

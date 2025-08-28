@@ -5,8 +5,13 @@ import { pickFooterThought } from "../lib/utils";
 
 export default function useFooterThought() {
   const [footerThought, setFooterThought] = useState("");
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
+    setMounted(true);
     setFooterThought(pickFooterThought());
   }, []);
-  return footerThought;
+
+  // Return empty string during SSR to avoid hydration mismatch
+  return mounted ? footerThought : "";
 }

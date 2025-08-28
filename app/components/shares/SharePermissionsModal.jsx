@@ -15,10 +15,7 @@ export default function SharePermissionsModal({
   const cancelRef = useRef(null);
   const confirmRef = useRef(null);
   const containerRef = useRef(null);
-  const titleId = useMemo(
-    () => `spm-title-${Math.random().toString(36).slice(2)}`,
-    []
-  );
+  const titleId = "share-permissions-title";
 
   useEffect(() => {
     if (!open) return;

@@ -14,14 +14,8 @@ export default function AddCategoryModal({
   const inputRef = useRef(null);
   const cancelRef = useRef(null);
   const confirmRef = useRef(null);
-  const titleId = useMemo(
-    () => `acm-title-${Math.random().toString(36).slice(2)}`,
-    []
-  );
-  const descId = useMemo(
-    () => `acm-desc-${Math.random().toString(36).slice(2)}`,
-    []
-  );
+  const titleId = "add-category-title";
+  const descId = "add-category-description";
 
   useEffect(() => {
     if (!open) return;
