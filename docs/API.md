@@ -74,6 +74,24 @@ Response 200 JSON: Array of todos
   },
   ...
 ]
+  ## Permissions overview
+
+  Ownership vs. Shared access:
+
+  - Owner (your own todos): full control. You can create, edit, delete, clear completed, and clear categories without extra checks.
+  - Shared (someone else’s todos): actions are gated by permissions on a specific owner+category.
+
+  Permission levels and what they allow:
+
+  - read: View todos for that owner+category via GET /api/todos?owner=<ownerUid>&category=<cat>.
+  - write: Create todos in the owner’s category via POST /api/todos with { ownerUid, category }.
+  - edit: Update text/completed/category on the owner’s todos via PATCH /api/todos. When moving a todo to a different category, you must also have edit on the destination category.
+  - delete: Delete a single todo by id, clear completed in a category, or clear an entire category via DELETE /api/todos with ownerUid and category as applicable.
+
+  Errors:
+
+  - 403 forbidden: Returned when you call an endpoint without the required permission level for that owner+category.
+
 ```
 
 Notes:
@@ -223,31 +241,39 @@ Responses:
   },
   ...
 ]
-```
+  - Requires token. For shared view, you must be shared on {owner, category} with at least `read` permission.
 
 - sharedWithMe=1: Array grouped by owner
 
 ```
+
 [
-  {
-    "ownerUid": "<uid>",
+{
+"ownerUid": "<uid>",
+
+## Mobile usage tips
+
     "ownerEmail": "owner@example.com",
     "ownerName": "owner",
     "categories": ["work", "personal"],
     "categoriesMeta": { "work": { "createdAt": 1710000000000 } }
-  }
+
+}
 ]
+
 ```
 
 - owner+category: single permission doc for this viewer
 
 ```
+
 {
-  "id": "<share_id>",
-  "ownerUid": "<uid>",
-  "category": "work",
-  "permissions": ["read", "write"]
+"id": "<share_id>",
+"ownerUid": "<uid>",
+"category": "work",
+"permissions": ["read", "write"]
 }
+
 ```
 
 ---
@@ -265,11 +291,13 @@ Body JSON:
 Example:
 
 ```
+
 {
-  "category": "work",
-  "viewerEmail": "friend@example.com",
-  "permissions": ["read", "write"]
+"category": "work",
+"viewerEmail": "friend@example.com",
+"permissions": ["read", "write"]
 }
+
 ```
 
 Response 200 JSON: `{ "ok": true, "id": "<share_id>" }`
@@ -300,8 +328,10 @@ Errors: 400 (bad request), 401 (unauthorized)
 ## Headers for all requests
 
 ```
+
 Authorization: Bearer <Firebase ID token>
 Content-Type: application/json
+
 ```
 
 ## Mobile usage tips
@@ -309,3 +339,4 @@ Content-Type: application/json
 - Always fetch a fresh Firebase ID token before calling APIs.
 - For shared lists, ensure you know the `ownerUid` and `category` before calling.
 - Handle 401 by re-authenticating; handle 403 by showing a permissions message.
+```

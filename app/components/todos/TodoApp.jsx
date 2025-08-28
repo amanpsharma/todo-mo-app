@@ -456,9 +456,7 @@ export default function TodoApp() {
           sharedView ? [sharedView.category || "general"] : categories
         }
         onSubmit={submit}
-        onOpenAddCategoryModal={() => setAddCategoryOpen(true)}
         categoryDisabled={!!sharedView}
-        addCategoryDisabled={!!sharedView}
       />
 
       <FiltersBar
@@ -477,30 +475,9 @@ export default function TodoApp() {
           setCategoryFilter={setCategoryFilter}
           categoriesWithTodos={categoriesWithTodos}
           setConfirmDeleteCategory={setConfirmDeleteCategory}
+          onOpenAddCategoryModal={() => setAddCategoryOpen(true)}
         />
       )}
-
-      <SharesPanel
-        categories={categories}
-        sharedView={sharedView}
-        setSharedView={setSharedView}
-        sharedPerms={sharedPerms}
-        shareCategory={shareCategory}
-        setShareCategory={setShareCategory}
-        shareEmail={shareEmail}
-        setShareEmail={setShareEmail}
-        shareBusy={shareBusy}
-        shareMsg={shareMsg}
-        onShare={handleShare}
-        onShareMany={handleShareMany}
-        myShares={myShares}
-        revokeShare={revokeShare}
-        createShare={createShare}
-        sharedWithMe={sharedWithMe}
-        leaveSharedCategory={leaveSharedCategory}
-        loadSharedTodos={loadSharedTodos}
-        sharedError={sharedError}
-      />
 
       {!sharedView ? (
         <TodoList
@@ -551,7 +528,27 @@ export default function TodoApp() {
           }
         />
       )}
-
+      <SharesPanel
+        categories={categories}
+        sharedView={sharedView}
+        setSharedView={setSharedView}
+        sharedPerms={sharedPerms}
+        shareCategory={shareCategory}
+        setShareCategory={setShareCategory}
+        shareEmail={shareEmail}
+        setShareEmail={setShareEmail}
+        shareBusy={shareBusy}
+        shareMsg={shareMsg}
+        onShare={handleShare}
+        onShareMany={handleShareMany}
+        myShares={myShares}
+        revokeShare={revokeShare}
+        createShare={createShare}
+        sharedWithMe={sharedWithMe}
+        leaveSharedCategory={leaveSharedCategory}
+        loadSharedTodos={loadSharedTodos}
+        sharedError={sharedError}
+      />
       {(() => {
         const text = getFooterText(
           sharedView,

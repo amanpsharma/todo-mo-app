@@ -8,12 +8,34 @@ export default function CategoryChips({
   setCategoryFilter,
   categoriesWithTodos,
   setConfirmDeleteCategory,
+  onOpenAddCategoryModal,
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
       <span className="font-medium text-neutral-700 dark:text-neutral-300">
         Categories:
       </span>
+      <button
+        onClick={onOpenAddCategoryModal}
+        className="px-2 py-1 rounded border border-violet-600 text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 active:scale-[.98] inline-flex items-center justify-center gap-1 leading-none whitespace-nowrap"
+        title="Add a new category"
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="opacity-80 block shrink-0"
+          aria-hidden="true"
+        >
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        <span className="leading-none">Add</span>
+      </button>
       <button
         onClick={() => setCategoryFilter("all")}
         aria-pressed={categoryFilter === "all"}

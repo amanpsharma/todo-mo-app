@@ -5,9 +5,9 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
-  "start": "next start",
-  "lint": "next lint",
-  "test": "NODE_OPTIONS=--experimental-vm-modules jest --runInBand"
+    "start": "next start",
+    "lint": "next lint",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest --runInBand"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.8.2",
