@@ -16,21 +16,30 @@ export default function FiltersBar({
       label: "All",
       icon: FiList,
       count: stats.total,
-      color: "blue",
+      activeClasses:
+        "bg-blue-500 text-white shadow-md shadow-blue-500/25 scale-105",
+      inactiveClasses:
+        "bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 hover:shadow-sm",
     },
     {
       key: "active",
       label: "Active",
       icon: FiCircle,
       count: stats.active,
-      color: "green",
+      activeClasses:
+        "bg-green-500 text-white shadow-md shadow-green-500/25 scale-105",
+      inactiveClasses:
+        "bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 hover:shadow-sm",
     },
     {
       key: "completed",
       label: "Completed",
       icon: FiCheckCircle,
       count: stats.completed,
-      color: "purple",
+      activeClasses:
+        "bg-purple-500 text-white shadow-md shadow-purple-500/25 scale-105",
+      inactiveClasses:
+        "bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 hover:shadow-sm",
     },
   ];
 
@@ -49,9 +58,7 @@ export default function FiltersBar({
                 option.count
               } items)`}
               className={`group relative flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 rounded-md text-xs font-medium transition-all duration-200 min-w-[60px] sm:min-w-0 ${
-                isActive
-                  ? `bg-${option.color}-500 text-white shadow-md shadow-${option.color}-500/25 scale-105`
-                  : `bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 hover:shadow-sm`
+                isActive ? option.activeClasses : option.inactiveClasses
               }`}
             >
               <Icon
