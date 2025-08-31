@@ -14,7 +14,10 @@ function CheckToggle({ checked, onToggle }) {
       type="button"
       role="checkbox"
       aria-checked={checked}
-      onClick={onToggle}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
@@ -67,6 +70,7 @@ export default function TodoList({
   const prefersReducedMotion = useReducedMotion();
   const [selectedId, setSelectedId] = useState(null);
   const [suppressHoverId, setSuppressHoverId] = useState(null);
+  const [newItemsMap, setNewItemsMap] = useState({});
   const listRef = useRef(null);
 
   // Dismiss selection on outside click
@@ -79,6 +83,35 @@ export default function TodoList({
     document.addEventListener("mousedown", onDocDown);
     return () => document.removeEventListener("mousedown", onDocDown);
   }, []);
+
+  // Track the first visible todo for highlighting
+  const firstVisibleIdRef = useRef(null);
+  
+  // Effect to handle temporary highlight for new items
+  useEffect(() => {
+    if (visible.length > 0 && !prefersReducedMotion) {
+      const firstItem = visible[0];
+      const itemId = firstItem?.id || firstItem?._id;
+      
+      // Only apply highlight if this is a new item we haven't seen before
+      if (itemId && firstVisibleIdRef.current !== itemId) {
+        firstVisibleIdRef.current = itemId;
+        
+        // Mark the item as new
+        setNewItemsMap(prev => ({ ...prev, [itemId]: true }));
+        
+        console.log(`Highlight added for item: ${itemId}`);
+        
+        // Set a timer to remove the highlight after 3 seconds
+        const timer = setTimeout(() => {
+          console.log(`Removing highlight for item: ${itemId}`);
+          setNewItemsMap(prev => ({ ...prev, [itemId]: false }));
+        }, 3000);
+        
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [visible, prefersReducedMotion]);
   const listVariants = prefersReducedMotion
     ? {}
     : {
@@ -99,7 +132,7 @@ export default function TodoList({
   return (
     <ul
       ref={listRef}
-      className="flex flex-col gap-4 max-h-96 overflow-y-auto scroll-thin pr-1"
+      className="flex flex-col gap-5 max-h-96 overflow-y-auto scroll-thin pr-1"
       aria-live="polite"
     >
       <AnimatePresence initial={false}>
@@ -135,12 +168,13 @@ export default function TodoList({
           {visible.map((todo, idx) => {
             const isEditing = false; // inline editing removed; using modal instead
             // Inline confirm UI removed: use main ConfirmModal only
-            const isNew = idx === 0; // recently added appear first per reducer
             const id1 = typeof todo.id === "string" ? todo.id.trim() : "";
             const id2 = typeof todo._id === "string" ? todo._id.trim() : "";
+            const todoId = id1 || id2;
+            // Explicit check for true to ensure we only highlight when specifically marked
+            const isNew = newItemsMap[todoId] === true;
             const itemKey =
-              id1 ||
-              id2 ||
+              todoId ||
               `${todo.category || "general"}-${todo.text || "na"}-$$${
                 todo.createdAt ?? "na"
               }-${idx}`;
@@ -162,7 +196,7 @@ export default function TodoList({
                 onMouseLeave={() => {
                   if (suppressHoverId === todo.id) setSuppressHoverId(null);
                 }}
-                className={`relative group flex items-center gap-3 rounded border transition-colors duration-150 border-neutral-300 dark:border-neutral-700 bg-white/70 dark:bg-neutral-900/60 px-3 py-2 shadow-sm cursor-pointer hover:bg-neutral-50/70 dark:hover:bg-neutral-800/60 ${
+                className={`relative group flex items-center gap-3 rounded border transition-colors duration-150 border-neutral-300 dark:border-neutral-700 bg-white/70 dark:bg-neutral-900/60 px-3 py-3 my-1 shadow-sm cursor-pointer hover:bg-neutral-50/70 dark:hover:bg-neutral-800/60 ${
                   isNew && !prefersReducedMotion
                     ? "ring-2 ring-violet-300/60"
                     : ""
@@ -209,11 +243,11 @@ export default function TodoList({
                           : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100";
                       return (
                         <div
-                          className={`ml-auto flex items-center gap-2 text-xs transition-opacity ${actionsVisibilityClass}`}
+                          className={`absolute right-2 sm:right-3 top-2 sm:top-3 flex items-center gap-1 sm:gap-2 transition-opacity ${actionsVisibilityClass}`}
                         >
                           {
                             <motion.button
-                              whileTap={{ scale: 0.96 }}
+                              whileTap={{ scale: 0.92 }}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (!allowEdit) {
@@ -224,22 +258,24 @@ export default function TodoList({
                                 else if (typeof startEdit === "function")
                                   startEdit(todo);
                               }}
-                              className={`inline-flex items-center gap-1 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 ${
+                              className={`inline-flex items-center justify-center p-1.5 sm:p-2 rounded-full ${
                                 allowEdit
-                                  ? "text-blue-700 dark:text-blue-300"
-                                  : "text-neutral-400 dark:text-neutral-500 cursor-not-allowed opacity-60 hover:bg-transparent"
+                                  ? "text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 active:bg-violet-100 dark:active:bg-violet-900/30"
+                                  : "text-neutral-400 dark:text-neutral-500 cursor-not-allowed opacity-60"
                               }`}
                               title={
                                 allowEdit ? "Edit" : "No permission to edit"
                               }
                               aria-disabled={!allowEdit}
                             >
-                              <FiEdit2 className="w-3.5 h-3.5" aria-hidden />
-                              <span className="hidden md:inline">Edit</span>
+                              <FiEdit2
+                                className="w-3.5 h-3.5 sm:w-4 sm:h-4"
+                                aria-hidden
+                              />
                             </motion.button>
                           }
                           <motion.button
-                            whileTap={{ scale: 0.96 }}
+                            whileTap={{ scale: 0.92 }}
                             onClick={(e) => {
                               e.stopPropagation();
                               if (!allowDelete) {
@@ -248,34 +284,26 @@ export default function TodoList({
                               }
                               setConfirmDeleteId(todo.id);
                             }}
-                            className={`inline-flex items-center gap-1 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 hover:bg-red-50 dark:hover:bg-red-900/30 ${
+                            className={`inline-flex items-center justify-center p-1.5 sm:p-2 rounded-full ${
                               allowDelete
-                                ? "text-red-700 dark:text-red-300"
-                                : "text-neutral-400 dark:text-neutral-500 cursor-not-allowed opacity-60 hover:bg-transparent"
+                                ? "text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 active:bg-red-100 dark:active:bg-red-900/30"
+                                : "text-neutral-400 dark:text-neutral-500 cursor-not-allowed opacity-60"
                             }`}
                             title={
                               allowDelete ? "Delete" : "No permission to delete"
                             }
                             aria-disabled={!allowDelete}
                           >
-                            <FiTrash2 className="w-3.5 h-3.5" aria-hidden />
-                            <span className="hidden md:inline">Delete</span>
+                            <FiTrash2
+                              className="w-3.5 h-3.5 sm:w-4 sm:h-4"
+                              aria-hidden
+                            />
                           </motion.button>
                         </div>
                       );
                     })()}
                   </div>
-                  <motion.time
-                    layout
-                    dateTime={new Date(todo.createdAt).toISOString()}
-                    className="text-[10px] shrink-0 self-center text-neutral-400 hidden sm:inline"
-                    title={new Date(todo.createdAt).toLocaleString()}
-                  >
-                    {new Date(todo.createdAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </motion.time>
+                  {/* Time is now shown inline with the text */}
                 </div>
               </motion.li>
             );
