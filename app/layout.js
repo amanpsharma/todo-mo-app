@@ -31,7 +31,7 @@ export default function RootLayout({ children }) {
       <body className="antialiased font-nunito" suppressHydrationWarning={true}>
         <ReduxProvider>
           <AuthProvider>
-            <div className="max-w-3xl mx-auto px-4 pt-6">
+            <div className="max-w-3xl mx-auto md:px-4 px-2 md:pt-4">
               <HeaderAuth />
               {children}
             </div>

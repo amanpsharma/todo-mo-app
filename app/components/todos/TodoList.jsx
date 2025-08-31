@@ -99,12 +99,12 @@ export default function TodoList({
   return (
     <ul
       ref={listRef}
-      className="flex flex-col gap-2 max-h-96 overflow-y-auto scroll-thin pr-1"
+      className="flex flex-col gap-4 max-h-96 overflow-y-auto scroll-thin pr-1"
       aria-live="polite"
     >
       <AnimatePresence initial={false}>
         {loading && (
-          <li key="loading" className="flex flex-col gap-2 w-full">
+          <li key="loading" className="flex flex-col gap-4 w-full">
             {skeletonRows.map((_, i) => (
               <div
                 key={i}
