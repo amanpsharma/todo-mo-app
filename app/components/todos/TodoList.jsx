@@ -86,28 +86,28 @@ export default function TodoList({
 
   // Track the first visible todo for highlighting
   const firstVisibleIdRef = useRef(null);
-  
+
   // Effect to handle temporary highlight for new items
   useEffect(() => {
     if (visible.length > 0 && !prefersReducedMotion) {
       const firstItem = visible[0];
       const itemId = firstItem?.id || firstItem?._id;
-      
+
       // Only apply highlight if this is a new item we haven't seen before
       if (itemId && firstVisibleIdRef.current !== itemId) {
         firstVisibleIdRef.current = itemId;
-        
+
         // Mark the item as new
-        setNewItemsMap(prev => ({ ...prev, [itemId]: true }));
-        
+        setNewItemsMap((prev) => ({ ...prev, [itemId]: true }));
+
         console.log(`Highlight added for item: ${itemId}`);
-        
+
         // Set a timer to remove the highlight after 3 seconds
         const timer = setTimeout(() => {
           console.log(`Removing highlight for item: ${itemId}`);
-          setNewItemsMap(prev => ({ ...prev, [itemId]: false }));
+          setNewItemsMap((prev) => ({ ...prev, [itemId]: false }));
         }, 3000);
-        
+
         return () => clearTimeout(timer);
       }
     }
