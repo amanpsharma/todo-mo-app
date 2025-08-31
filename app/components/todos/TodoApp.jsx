@@ -442,7 +442,7 @@ export default function TodoApp() {
     return <LoggedOutHero loading={loading} loginGoogle={loginGoogle} />;
 
   return (
-    <div className="w-full max-w-xl mx-auto flex flex-col gap-6">
+    <div className="w-full md:px-12 mx-auto flex flex-col gap-6">
       <AddTodoForm
         input={input}
         setInput={setInput}

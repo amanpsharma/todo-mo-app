@@ -46,7 +46,7 @@ export default function FiltersBar({
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       {/* Filter Buttons */}
-      <div className="flex flex-wrap gap-2 sm:gap-1.5 justify-center sm:justify-start">
+      <div className="flex flex-wrap gap-6 sm:gap-4 justify-center sm:justify-start">
         {filterOptions.map((option) => {
           const Icon = option.icon;
           const isActive = filter === option.key;

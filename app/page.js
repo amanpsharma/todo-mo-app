@@ -30,7 +30,7 @@ export const viewport = {
 
 export default function Home() {
   return (
-    <main className="min-h-screen px-1 py-4 md:py-16 font-sans bg-white dark:bg-neutral-900">
+    <main className="min-h-screen px-1 py-4 md:py-8 font-sans bg-white dark:bg-neutral-900">
       <Suspense
         fallback={
           <div className="w-full max-w-xl mx-auto">
