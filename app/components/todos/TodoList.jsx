@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { FiCheck, FiEdit2, FiTrash2 } from "react-icons/fi";
+import { FiCheck, FiCopy, FiEdit2, FiTrash2 } from "react-icons/fi";
 import "./todoList.css";
 import {
   listVariants,
@@ -17,10 +17,12 @@ function IconCheck({ className = "" }) {
 function CheckToggle({ checked, onToggle }) {
   const prefersReducedMotion = useReducedMotion();
   return (
-    <button
+    <motion.button
       type="button"
       role="checkbox"
       aria-checked={checked}
+      whileHover={{ scale: 1.1 }}
+      whileTap={{ scale: 0.9 }}
       onClick={(e) => {
         e.stopPropagation();
         onToggle();
@@ -31,14 +33,14 @@ function CheckToggle({ checked, onToggle }) {
           onToggle();
         }
       }}
-      className={`relative inline-flex items-center justify-center rounded-md border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
+      className={`check-toggle relative inline-flex items-center justify-center rounded-lg border-2 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500
         ${
           checked
-            ? "bg-green-600 border-green-600 text-white hover:bg-green-500"
-            : "bg-white/90 dark:bg-neutral-900/70 border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            ? "bg-gradient-to-br from-emerald-500 to-green-600 border-emerald-500 text-white shadow-lg shadow-emerald-500/30"
+            : "bg-white dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 hover:border-emerald-400 dark:hover:border-emerald-500 hover:shadow-md"
         }
       `}
-      style={{ width: 22, height: 22 }}
+      style={{ width: 24, height: 24 }}
       aria-label={checked ? "Mark as not completed" : "Mark as completed"}
     >
       <motion.div
@@ -54,9 +56,9 @@ function CheckToggle({ checked, onToggle }) {
             : checkToggleAnimation.transition
         }
       >
-        <IconCheck />
+        <IconCheck className={checked ? "drop-shadow-sm" : ""} />
       </motion.div>
-    </button>
+    </motion.button>
   );
 }
 
@@ -80,6 +82,17 @@ export default function TodoList({
   const [selectedId, setSelectedId] = useState(null);
   const [suppressHoverId, setSuppressHoverId] = useState(null);
   const [newItemsMap, setNewItemsMap] = useState({});
+  const [copiedId, setCopiedId] = useState(null);
+
+  const handleCopy = async (todo) => {
+    try {
+      await navigator.clipboard.writeText(todo.text);
+      setCopiedId(todo.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
   const listRef = useRef(null);
   const firstVisibleIdRef = useRef(null);
 
@@ -126,13 +139,20 @@ export default function TodoList({
           {skeletonRows.map((_, i) => (
             <motion.div
               key={i}
-              initial={{ opacity: 0, y: 5 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: i * 0.1 }}
-              className="h-12 rounded border border-neutral-200 dark:border-neutral-800 bg-gradient-to-r from-neutral-100/70 to-white/80 dark:from-neutral-800/40 dark:to-neutral-900/60"
+              transition={{ duration: 0.4, delay: i * 0.08 }}
+              className="h-14 rounded-xl border border-neutral-200/60 dark:border-neutral-700/40 bg-gradient-to-r from-neutral-50 via-white to-neutral-50 dark:from-neutral-800/50 dark:via-neutral-900/50 dark:to-neutral-800/50"
               style={{ overflow: "hidden", position: "relative" }}
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 dark:via-white/10 to-transparent skeleton-loading" />
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/80 dark:via-white/5 to-transparent skeleton-loading" />
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-4">
+                <div className="w-6 h-6 rounded-lg bg-neutral-200/80 dark:bg-neutral-700/50" />
+                <div className="flex flex-col gap-1.5">
+                  <div className="w-16 h-3 rounded-full bg-neutral-200/80 dark:bg-neutral-700/50" />
+                  <div className="w-32 h-3 rounded-full bg-neutral-200/60 dark:bg-neutral-700/30" />
+                </div>
+              </div>
             </motion.div>
           ))}
         </motion.li>
@@ -147,9 +167,33 @@ export default function TodoList({
           animate={prefersReducedMotion ? {} : emptyStateVariants.animate}
           exit={prefersReducedMotion ? {} : emptyStateVariants.exit}
           transition={{ type: "spring", stiffness: 300, damping: 25 }}
-          className="text-sm text-neutral-500 italic p-5 text-center border rounded border-dashed bg-neutral-50/50 dark:bg-neutral-800/30"
+          className="empty-state flex flex-col items-center justify-center gap-3 p-8 text-center rounded-xl"
         >
-          No todos {filter !== "all" ? `for ${filter}` : "yet"}.
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-violet-100 to-indigo-100 dark:from-violet-900/30 dark:to-indigo-900/30 flex items-center justify-center">
+            <svg
+              className="w-8 h-8 text-violet-400 dark:text-violet-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+              />
+            </svg>
+          </div>
+          <div>
+            <p className="text-base font-medium text-neutral-600 dark:text-neutral-300">
+              {filter !== "all" ? `No ${filter} todos` : "No todos yet"}
+            </p>
+            <p className="text-sm text-neutral-400 dark:text-neutral-500 mt-1">
+              {filter !== "all"
+                ? "Try a different filter"
+                : "Add your first task to get started"}
+            </p>
+          </div>
         </motion.li>
       );
     }
@@ -190,13 +234,22 @@ export default function TodoList({
               onMouseLeave={() => {
                 if (suppressHoverId === todo.id) setSuppressHoverId(null);
               }}
-              className={`relative group flex items-center gap-3 rounded border transition-all duration-200 ease-in-out border-neutral-300 dark:border-neutral-700 bg-white/70 dark:bg-neutral-900/60 px-3 py-3 my-1 shadow-sm cursor-pointer hover:bg-neutral-50/90 dark:hover:bg-neutral-800/80 hover:border-neutral-400 dark:hover:border-neutral-600 hover:shadow-md ${
-                isNew && !prefersReducedMotion
-                  ? "ring-2 ring-violet-300/60"
-                  : ""
-              }`}
+              className={`todo-item relative group flex items-center gap-4 rounded-xl border transition-all duration-300 ease-out
+                ${
+                  todo.completed
+                    ? "todo-completed border-emerald-200/50 dark:border-emerald-800/30 bg-white/60 dark:bg-neutral-900/40"
+                    : "border-neutral-200/80 dark:border-neutral-700/60 bg-white/80 dark:bg-neutral-900/70"
+                }
+                px-4 py-3.5 my-2 shadow-sm cursor-pointer
+                hover:shadow-lg hover:shadow-neutral-200/50 dark:hover:shadow-neutral-900/50
+                hover:border-violet-300/60 dark:hover:border-violet-600/40
+                hover:-translate-y-0.5
+                ${isNew && !prefersReducedMotion ? "todo-new ring-2 ring-violet-400/50 ring-offset-2 ring-offset-white dark:ring-offset-neutral-900" : ""}
+                ${selectedId === todo.id ? "ring-2 ring-violet-500/40 border-violet-400 dark:border-violet-500" : ""}
+              `}
             >
-              <div className="flex w-full items-center gap-3 transition">
+              <div className="todo-priority-indicator" />
+              <div className="flex w-full items-center gap-4 transition">
                 <div className="shrink-0">
                   <CheckToggle
                     checked={todo.completed}
@@ -204,54 +257,78 @@ export default function TodoList({
                   />
                 </div>
                 <div
-                  className={`flex-1 min-w-0 flex items-center gap-3 ${
-                    todo.completed ? "opacity-90" : ""
+                  className={`flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 ${
+                    todo.completed ? "opacity-80" : ""
                   }`}
                 >
-                  <motion.p
+                  <motion.div
                     layout
                     transition={{
                       layout: { duration: 0.3, ease: "easeOut" },
                     }}
                     initial={false}
                     animate={{
-                      opacity: todo.completed ? 0.75 : 1,
+                      opacity: todo.completed ? 0.7 : 1,
                       transition: { duration: 0.2 },
                     }}
-                    className={`select-text flex-1 min-w-0 truncate ${
-                      todo.completed
-                        ? "line-through text-neutral-400"
-                        : "text-neutral-800 dark:text-neutral-100"
-                    }`}
-                    title={todo.text}
+                    className="flex-1 min-w-0 flex items-center gap-2 pr-28 sm:pr-36"
                   >
                     <motion.span
-                      className="mr-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300"
+                      className="category-badge shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-indigo-700 dark:text-indigo-300 uppercase"
                       animate={{
-                        opacity: todo.completed ? 0.6 : 1,
+                        opacity: todo.completed ? 0.5 : 1,
                         scale: todo.completed ? 0.95 : 1,
                         transition: { duration: 0.2 },
                       }}
                     >
-                      {(todo.category || "general").slice(0, 1).toUpperCase() +
-                        (todo.category || "general").slice(1)}
+                      {todo.category || "general"}
                     </motion.span>
-                    {todo.text}
-                  </motion.p>
+                    <span
+                      className={`select-text text-[15px] truncate ${
+                        todo.completed
+                          ? "line-through decoration-2 decoration-neutral-300 dark:decoration-neutral-600 text-neutral-400 dark:text-neutral-500"
+                          : "text-neutral-800 dark:text-neutral-100 font-medium"
+                      }`}
+                      title={todo.text}
+                    >
+                      {todo.text}
+                    </span>
+                  </motion.div>
                   <motion.div
-                    initial={{ x: 5, opacity: 0 }}
+                    initial={{ x: 8, opacity: 0 }}
                     animate={{ x: 0, opacity: 1 }}
-                    transition={{ duration: 0.2 }}
-                    className={`absolute right-2 sm:right-3 top-2 sm:top-3 flex items-center gap-1 sm:gap-2 transition-all ${
+                    transition={{ duration: 0.25, ease: "easeOut" }}
+                    className={`action-buttons absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 sm:gap-1 pl-6 transition-all duration-200 ${
                       selectedId === todo.id
                         ? "opacity-100"
                         : suppressHoverId === todo.id
-                        ? "opacity-100 sm:opacity-0"
-                        : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                          ? "opacity-100 sm:opacity-0"
+                          : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                     }`}
                   >
                     <motion.button
-                      whileTap={{ scale: 0.92 }}
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopy(todo);
+                      }}
+                      className={`inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg transition-all duration-200 ${
+                        copiedId === todo.id
+                          ? "text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30"
+                          : "text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-700 dark:hover:text-neutral-200"
+                      }`}
+                      title={copiedId === todo.id ? "Copied!" : "Copy todo"}
+                    >
+                      {copiedId === todo.id ? (
+                        <FiCheck className="w-4 h-4" aria-hidden />
+                      ) : (
+                        <FiCopy className="w-4 h-4" aria-hidden />
+                      )}
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
                       onClick={(e) => {
                         e.stopPropagation();
                         if (!allowEdit) {
@@ -260,41 +337,36 @@ export default function TodoList({
                         }
                         onEditClick?.(todo);
                       }}
-                      className={`inline-flex items-center justify-center p-1.5 sm:p-2 rounded-full ${
+                      className={`inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg transition-all duration-200 ${
                         allowEdit
-                          ? "text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 active:bg-violet-100 dark:active:bg-violet-900/30"
-                          : "text-neutral-400 dark:text-neutral-500 cursor-not-allowed opacity-60"
+                          ? "text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/30 hover:shadow-md"
+                          : "text-neutral-400 dark:text-neutral-500 cursor-not-allowed opacity-50"
                       }`}
                       title={allowEdit ? "Edit" : "No permission to edit"}
                       aria-disabled={!allowEdit}
                     >
-                      <FiEdit2
-                        className="w-3.5 h-3.5 sm:w-4 sm:h-4"
-                        aria-hidden
-                      />
+                      <FiEdit2 className="w-4 h-4" aria-hidden />
                     </motion.button>
                     <motion.button
-                      whileTap={{ scale: 0.92 }}
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
                       onClick={(e) => {
                         e.stopPropagation();
                         if (!allowDelete) {
                           onBlockedDelete?.();
                           return;
                         }
-                        removeTodo(todo.id); // Assuming removeTodo is passed and handles confirmation
+                        removeTodo(todo.id);
                       }}
-                      className={`inline-flex items-center justify-center p-1.5 sm:p-2 rounded-full ${
+                      className={`inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg transition-all duration-200 ${
                         allowDelete
-                          ? "text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 active:bg-red-100 dark:active:bg-red-900/30"
-                          : "text-neutral-400 dark:text-neutral-500 cursor-not-allowed opacity-60"
+                          ? "text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 hover:shadow-md"
+                          : "text-neutral-400 dark:text-neutral-500 cursor-not-allowed opacity-50"
                       }`}
                       title={allowDelete ? "Delete" : "No permission to delete"}
                       aria-disabled={!allowDelete}
                     >
-                      <FiTrash2
-                        className="w-3.5 h-3.5 sm:w-4 sm:h-4"
-                        aria-hidden
-                      />
+                      <FiTrash2 className="w-4 h-4" aria-hidden />
                     </motion.button>
                   </motion.div>
                 </div>
@@ -310,6 +382,7 @@ export default function TodoList({
     selectedId,
     suppressHoverId,
     newItemsMap,
+    copiedId,
     prefersReducedMotion,
     skeletonRows,
     filter,
@@ -325,7 +398,7 @@ export default function TodoList({
   return (
     <ul
       ref={listRef}
-      className="flex flex-col gap-5 max-h-96 overflow-y-auto scroll-thin pr-1"
+      className="flex flex-col gap-1 max-h-[480px] overflow-y-auto scroll-thin pr-2 py-1"
       aria-live="polite"
     >
       <AnimatePresence initial={false}>{todoList}</AnimatePresence>
