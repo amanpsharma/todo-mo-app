@@ -271,7 +271,7 @@ export default function TodoList({
                       opacity: todo.completed ? 0.7 : 1,
                       transition: { duration: 0.2 },
                     }}
-                    className="flex-1 min-w-0 flex items-center gap-2 pr-28 sm:pr-36"
+                    className="flex-1 min-w-0 flex items-center gap-2 pr-28 sm:pr-28"
                   >
                     <motion.span
                       className="category-badge shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-indigo-700 dark:text-indigo-300 uppercase"
